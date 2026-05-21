@@ -5,6 +5,9 @@ on:
     - cron: '0 0 * * *'   # 매일 KST 오전 9시 (UTC 00:00)
   workflow_dispatch:        # 수동 실행 버튼도 제공
 
+permissions:
+  contents: write           # git push 권한 부여
+
 jobs:
   scrape:
     runs-on: ubuntu-latest
