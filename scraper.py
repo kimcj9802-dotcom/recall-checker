@@ -86,9 +86,9 @@ _SEARCH_ENDPOINTS = [
 ]
 
 def _date_params() -> dict:
-    """최근 5년 날짜 범위 파라미터"""
+    """최근 2개월 날짜 범위 파라미터"""
     end   = datetime.now().strftime("%Y-%m-%d")
-    start = (datetime.now() - timedelta(days=365 * 5)).strftime("%Y-%m-%d")
+    start = (datetime.now() - timedelta(days=60)).strftime("%Y-%m-%d")
     return {
         # MFDS 실제 파라미터 (detail URL에서 확인)
         "startPlanSbmsnDt": start,
@@ -594,7 +594,7 @@ def fetch_recall_detail(dept_receipt_no: str) -> list:
     import re as _re
 
     end = datetime.now().strftime("%Y-%m-%d")
-    start = (datetime.now() - timedelta(days=365 * 5)).strftime("%Y-%m-%d")
+    start = (datetime.now() - timedelta(days=60)).strftime("%Y-%m-%d")
     detail_url = (
         f"{BASE_URL}/recall/view/MNU20265"
         f"?startPlanSbmsnDt={start}&mid=MNU20265&searchYn=true"

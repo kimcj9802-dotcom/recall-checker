@@ -1,6 +1,7 @@
 import io
 import os
 import threading
+from datetime import datetime, timedelta
 
 import pandas as pd
 from flask import Flask, jsonify, render_template, request, send_file
@@ -10,6 +11,33 @@ from scraper import fetch_recall_data, fetch_recall_detail, get_cache_info, load
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 20 * 1024 * 1024  # 20MB
+
+
+def _filter_active_recalls(recalls: list, months: int = 2) -> list:
+    """진행중이고 최근 N개월 이내인 회수 목록만 반환"""
+    cutoff = datetime.now() - timedelta(days=months * 30)
+    result = []
+    for r in recalls:
+        # 1) 회수진행여부: '진행' 포함 항목만
+        status = r.get("회수진행여부", "")
+        if status and "진행" not in status:
+            continue
+
+        # 2) 보고일: 최근 2개월 이내 (날짜가 없으면 통과)
+        date_str = (r.get("보고일") or r.get("보고일자", "")).strip()
+        if date_str and date_str != "-":
+            parsed = None
+            for fmt in ("%Y-%m-%d", "%Y.%m.%d", "%Y/%m/%d"):
+                try:
+                    parsed = datetime.strptime(date_str[:10], fmt)
+                    break
+                except ValueError:
+                    continue
+            if parsed and parsed < cutoff:
+                continue
+
+        result.append(r)
+    return result
 
 
 def _upgrade_by_lot(matches: list) -> list:
@@ -128,11 +156,13 @@ def refresh_status():
 
 @app.route("/api/recalls")
 def get_recalls():
-    """캐시된 회수목록 반환"""
+    """캐시된 회수목록 반환 (진행중 + 최근 2개월 필터)"""
     try:
         recalls = fetch_recall_data()
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+    recalls = _filter_active_recalls(recalls)
 
     items = []
     for r in recalls:
@@ -196,6 +226,7 @@ def check_assets():
     else:
         try:
             recalls = fetch_recall_data()
+            recalls = _filter_active_recalls(recalls)
         except Exception as e:
             return jsonify({
                 "error": f"자동 조회 실패: {e}",
