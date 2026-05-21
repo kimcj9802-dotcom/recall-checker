@@ -36,12 +36,19 @@ jobs:
 
       - name: 결과 커밋 & 푸시
         run: |
+          # 스크래핑된 파일 임시 보관
+          cp cache/recalls.json /tmp/recalls_new.json
+          # 원격 최신 상태로 동기화
+          git fetch origin main
+          git reset --hard origin/main
+          # 새 데이터 복원
+          cp /tmp/recalls_new.json cache/recalls.json
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add cache/recalls.json
           if git diff --staged --quiet; then
-            echo "변경 없음"
+            echo "변경 없음 - 커밋 건너뜀"
           else
             git commit -m "chore: MFDS 회수목록 자동 갱신 $(date '+%Y-%m-%d')"
-            git push --force-with-lease origin main
+            git push origin main
           fi
