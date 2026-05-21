@@ -43,8 +43,12 @@ jobs:
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          REMOTE="https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
+          git pull --rebase "$REMOTE" main
           git add cache/recalls.json
-          git diff --staged --quiet && echo "변경 없음" && exit 0
-          git commit -m "chore: MFDS 회수목록 자동 갱신 $(date '+%Y-%m-%d')"
-          git pull --rebase https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git main
-          git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git HEAD:main
+          if git diff --staged --quiet; then
+            echo "변경 없음 - 커밋 건너뜀"
+          else
+            git commit -m "chore: MFDS 회수목록 자동 갱신 $(date '+%Y-%m-%d')"
+            git push "$REMOTE" HEAD:main
+          fi
