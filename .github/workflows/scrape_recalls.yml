@@ -6,7 +6,7 @@ on:
   workflow_dispatch:        # 수동 실행 버튼도 제공
 
 permissions:
-  contents: write           # git push 권한 부여
+  contents: write
 
 jobs:
   scrape:
@@ -15,6 +15,8 @@ jobs:
     steps:
       - name: 코드 체크아웃
         uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Python 설정
         uses: actions/setup-python@v5
@@ -27,6 +29,9 @@ jobs:
       - name: Chrome 확인
         run: google-chrome --version
 
+      - name: cache 디렉터리 생성
+        run: mkdir -p cache
+
       - name: MFDS 회수목록 수집
         run: python scrape_job.py
 
@@ -36,4 +41,4 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add cache/recalls.json
           git diff --staged --quiet && echo "변경 없음" || git commit -m "chore: MFDS 회수목록 자동 갱신 $(date '+%Y-%m-%d')"
-          git push
+          git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git HEAD:main
