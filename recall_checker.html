@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>의료기기 회수대상 자산 확인</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet" />
+  <!-- SheetJS: Excel 읽기/쓰기 -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <!-- Fuse.js: 퍼지 매칭 -->
+  <script src="https://cdn.jsdelivr.net/npm/fuse.js@7.0.0/dist/fuse.min.js"></script>
+
+  <style>
+    :root { --primary: #0d6efd; }
+    body { background: #f8f9fa; }
+    .hero {
+      background: linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%);
+      color: white; padding: 2rem 0 1.5rem;
+    }
+    .card { border: none; box-shadow: 0 2px 8px rgba(0,0,0,.08); }
+    .upload-zone {
+      border: 2px dashed #dee2e6; border-radius: 12px;
+      padding: 1.5rem; text-align: center; cursor: pointer;
+      transition: all .2s; background: #fafafa;
+    }
+    .upload-zone:hover, .upload-zone.dragover { border-color: #0d6efd; background: #f0f6ff; }
+    .upload-zone .icon { font-size: 2rem; color: #adb5bd; }
+    .upload-zone.has-file .icon { color: #0d6efd; }
+    .upload-zone.has-file { border-color: #0d6efd; background: #f0f6ff; }
+    .score-ring {
+      width: 52px; height: 52px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 700; font-size: .95rem; flex-shrink: 0;
+    }
+    .score-ring.high { background: #dc3545; color: #fff; }
+    .score-ring.low  { background: #fd7e14; color: #fff; }
+    .match-card { transition: transform .15s; }
+    .match-card:hover { transform: translateY(-2px); }
+    .match-card.level-HIGH { border-left: 4px solid #dc3545; }
+    .match-card.level-LOW  { border-left: 4px solid #fd7e14; }
+    .stat-box { text-align: center; padding: 1rem .5rem; }
+    .stat-box .num { font-size: 2rem; font-weight: 700; }
+    #resultSection { display: none; }
+    #spinner { display: none; }
+    .step-num {
+      width: 28px; height: 28px; border-radius: 50%;
+      background: #0d6efd; color: white;
+      display: inline-flex; align-items: center; justify-content: center;
+      font-size: .8rem; font-weight: 700; flex-shrink: 0;
+    }
+    .recall-table-wrap { max-height: 320px; overflow-y: auto; }
+    .col-map-row { background: #f8f9fa; border-radius: 8px; padding: .75rem 1rem; }
+  </style>
+</head>
+<body>
+
+<!-- 헤더 -->
+<div class="hero">
+  <div class="container">
+    <div class="d-flex align-items-center gap-3">
+      <i class="bi bi-shield-exclamation fs-2"></i>
+      <div>
+        <h1 class="h3 mb-0 fw-bold">의료기기 회수대상 자산 확인</h1>
+        <small class="opacity-75">식약처 의료기기안심책방 회수목록 × 병원 자산 비교 (설치 불필요)</small>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="container py-4" style="max-width:960px">
+
+  <!-- STEP 1: 파일 업로드 -->
+  <div class="card mb-3">
+    <div class="card-body p-4">
+      <h5 class="fw-bold mb-3">
+        <span class="step-num me-2">1</span>파일 업로드
+      </h5>
+
+      <div class="row g-3">
+        <!-- 병원 자산 -->
+        <div class="col-md-6">
+          <label class="form-label fw-semibold">
+            <i class="bi bi-hospital text-primary me-1"></i>병원 자산 목록
+            <span class="text-danger">*</span>
+          </label>
+          <div class="upload-zone" id="assetZone" onclick="triggerInput('assetFile')">
+            <input type="file" id="assetFile" accept=".xlsx,.xls" hidden />
+            <div class="icon"><i class="bi bi-file-earmark-excel"></i></div>
+            <div class="mt-1 text-muted small" id="assetLabel">클릭 또는 드래그 (.xlsx)</div>
+          </div>
+          <div class="form-text">제품명, 업체명, 모델명, 로트번호 컬럼 포함</div>
+        </div>
+
+        <!-- MFDS 회수목록 -->
+        <div class="col-md-6">
+          <label class="form-label fw-semibold">
+            <i class="bi bi-exclamation-triangle text-danger me-1"></i>MFDS 회수목록
+            <span class="text-danger">*</span>
+          </label>
+          <div class="upload-zone" id="recallZone" onclick="triggerInput('recallFile')">
+            <input type="file" id="recallFile" accept=".xlsx,.xls,.csv" hidden />
+            <div class="icon"><i class="bi bi-file-earmark-spreadsheet"></i></div>
+            <div class="mt-1 text-muted small" id="recallLabel">클릭 또는 드래그 (.xlsx / .csv)</div>
+          </div>
+          <div class="form-text">
+            <a href="https://emedi.mfds.go.kr/recall/MNU20265" target="_blank">
+              의료기기안심책방 <i class="bi bi-box-arrow-up-right"></i>
+            </a>에서 다운로드
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- STEP 2: 컬럼 매핑 (파일 업로드 후 표시) -->
+  <div class="card mb-3" id="mappingCard" style="display:none">
+    <div class="card-body p-4">
+      <h5 class="fw-bold mb-1">
+        <span class="step-num me-2">2</span>컬럼 확인
+        <span class="text-muted fw-normal fs-6 ms-1">— 자동 인식된 컬럼을 확인하고 필요 시 수정하세요</span>
+      </h5>
+      <p class="text-muted small mb-3">컬럼명이 달라도 매칭에 사용할 컬럼을 선택하면 됩니다.</p>
+
+      <div class="row g-3">
+        <div class="col-md-6">
+          <div class="col-map-row">
+            <div class="fw-semibold mb-2 small"><i class="bi bi-hospital text-primary me-1"></i>자산 파일 컬럼</div>
+            <div id="assetColMap"></div>
+          </div>
+        </div>
+        <div class="col-md-6">
+          <div class="col-map-row">
+            <div class="fw-semibold mb-2 small"><i class="bi bi-exclamation-triangle text-danger me-1"></i>회수목록 컬럼</div>
+            <div id="recallColMap"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- STEP 3: 실행 -->
+  <div class="card mb-4">
+    <div class="card-body p-4">
+      <h5 class="fw-bold mb-3"><span class="step-num me-2">3</span>비교 실행</h5>
+      <div class="d-flex align-items-center gap-3 flex-wrap">
+        <button class="btn btn-primary px-4" onclick="runCheck()" id="checkBtn">
+          <i class="bi bi-search me-1"></i>회수대상 확인
+        </button>
+        <div id="spinner" class="d-flex align-items-center gap-2 text-muted small">
+          <div class="spinner-border spinner-border-sm"></div><span>분석 중...</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 결과 -->
+  <div id="resultSection">
+
+    <!-- 통계 -->
+    <div class="row g-3 mb-4">
+      <div class="col-6 col-md-3"><div class="card h-100"><div class="stat-box">
+        <div class="num text-primary" id="stTotal">0</div><div class="text-muted small">전체 자산</div>
+      </div></div></div>
+      <div class="col-6 col-md-3"><div class="card h-100"><div class="stat-box">
+        <div class="num text-secondary" id="stRecalls">0</div><div class="text-muted small">회수목록 건수</div>
+      </div></div></div>
+      <div class="col-6 col-md-3"><div class="card h-100"><div class="stat-box">
+        <div class="num text-danger" id="stHigh">0</div><div class="text-muted small">높은 가능성</div>
+      </div></div></div>
+      <div class="col-6 col-md-3"><div class="card h-100"><div class="stat-box">
+        <div class="num text-warning" id="stLow">0</div><div class="text-muted small">검토 필요</div>
+      </div></div></div>
+    </div>
+
+    <!-- 결과 없음 -->
+    <div id="noMatchAlert" class="alert alert-success d-flex gap-2 align-items-center" style="display:none!important">
+      <i class="bi bi-check-circle-fill fs-5"></i>
+      <div><strong>이상 없음</strong> — 회수대상에 해당하는 자산이 발견되지 않았습니다.</div>
+    </div>
+
+    <!-- 매칭 목록 -->
+    <div id="matchListWrap" style="display:none">
+      <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+        <h5 class="fw-bold mb-0">
+          <i class="bi bi-exclamation-triangle-fill text-warning me-2"></i>매칭된 자산 목록
+        </h5>
+        <div class="d-flex gap-1 flex-wrap">
+          <button class="btn btn-sm btn-outline-secondary active" id="btnAll"  onclick="filterList('all')">전체</button>
+          <button class="btn btn-sm btn-outline-danger"           id="btnHigh" onclick="filterList('HIGH')">높은 가능성</button>
+          <button class="btn btn-sm btn-outline-warning"          id="btnLow"  onclick="filterList('LOW')">검토 필요</button>
+          <button class="btn btn-sm btn-success ms-2" onclick="exportExcel()">
+            <i class="bi bi-download me-1"></i>Excel 내보내기
+          </button>
+        </div>
+      </div>
+      <div id="matchList"></div>
+    </div>
+  </div>
+
+  <!-- 사용 안내 -->
+  <div class="card mt-4 bg-light border-0">
+    <div class="card-body">
+      <h6 class="fw-bold"><i class="bi bi-info-circle text-primary me-2"></i>사용 안내</h6>
+      <ol class="mb-0 small text-muted ps-3">
+        <li><a href="https://emedi.mfds.go.kr/recall/MNU20265" target="_blank">의료기기안심책방</a>에서 회수목록을 Excel로 다운로드합니다.</li>
+        <li>병원 자산 Excel과 다운로드한 회수목록 파일을 각각 업로드합니다.</li>
+        <li>컬럼이 자동 인식됩니다. 필요 시 드롭다운에서 직접 선택하세요.</li>
+        <li>[회수대상 확인]을 클릭하면 브라우저에서 바로 비교합니다 (서버 전송 없음).</li>
+      </ol>
+      <hr class="my-2" />
+      <div class="small text-muted">
+        <strong>매칭 점수:</strong>
+        <span class="badge bg-danger me-1">85점+</span>높은 가능성 —
+        <span class="badge bg-warning text-dark me-1">65~84점</span>검토 필요
+        (제품명 50% + 업체명 30% + 모델명 20%)
+      </div>
+    </div>
+  </div>
+
+</div><!-- /container -->
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+// ── 전역 상태 ─────────────────────────────────────
+let assetData   = [];   // [{컬럼명: 값, ...}]
+let recallData  = [];
+let assetCols   = [];
+let recallCols  = [];
+let allMatches  = [];
+let currentFilter = 'all';
+
+// 컬럼 자동 감지 키워드
+const COL_KEYWORDS = {
+  name:     ["제품명","품목명","기기명","장비명","의료기기명","제품 명","품목 명","item","product"],
+  maker:    ["업체명","제조사","제조업체","회사명","브랜드","업 체","제조원","manufacturer","company"],
+  model:    ["모델명","모델번호","모델","형식","형명","model"],
+  lot:      ["로트번호","로트","lot","배치번호","시리얼번호","시리얼","s/n","sn","serial"],
+  asset_id: ["자산번호","자산코드","관리번호","코드","번호","id","asset"],
+};
+
+// ── 파일 드래그앤드롭 ─────────────────────────────
+function triggerInput(id) { document.getElementById(id).click(); }
+
+function setupDrop(zoneId, inputId) {
+  const zone  = document.getElementById(zoneId);
+  const input = document.getElementById(inputId);
+  zone.addEventListener('dragover',  e => { e.preventDefault(); zone.classList.add('dragover'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
+  zone.addEventListener('drop', e => {
+    e.preventDefault(); zone.classList.remove('dragover');
+    if (e.dataTransfer.files[0]) { input.files = e.dataTransfer.files; handleFileChange(inputId); }
+  });
+  input.addEventListener('change', () => handleFileChange(inputId));
+}
+setupDrop('assetZone',  'assetFile');
+setupDrop('recallZone', 'recallFile');
+
+function handleFileChange(inputId) {
+  const isAsset = inputId === 'assetFile';
+  const file = document.getElementById(inputId).files[0];
+  if (!file) return;
+
+  const zone  = document.getElementById(isAsset ? 'assetZone'  : 'recallZone');
+  const label = document.getElementById(isAsset ? 'assetLabel' : 'recallLabel');
+  zone.classList.add('has-file');
+  zone.querySelector('.icon').innerHTML = '<i class="bi bi-file-earmark-check"></i>';
+  label.textContent = file.name;
+
+  readExcel(file, isAsset ? 'asset' : 'recall');
+}
+
+// ── Excel / CSV 읽기 ──────────────────────────────
+function readExcel(file, target) {
+  const reader = new FileReader();
+  reader.onload = e => {
+    const data = new Uint8Array(e.target.result);
+    const wb = XLSX.read(data, { type: 'array' });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
+
+    if (target === 'asset') {
+      assetData = rows;
+      assetCols = rows.length ? Object.keys(rows[0]) : [];
+    } else {
+      recallData = rows;
+      recallCols = rows.length ? Object.keys(rows[0]) : [];
+    }
+    tryShowMapping();
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+// ── 컬럼 매핑 UI ──────────────────────────────────
+function tryShowMapping() {
+  if (!assetData.length && !recallData.length) return;
+  document.getElementById('mappingCard').style.display = '';
+
+  if (assetCols.length)  renderColMap('assetColMap',  assetCols,  'a_', ['name','maker','model','lot','asset_id']);
+  if (recallCols.length) renderColMap('recallColMap', recallCols, 'r_', ['name','maker','model','lot']);
+}
+
+function renderColMap(containerId, cols, prefix, fields) {
+  const labels = { name:'제품명', maker:'업체명', model:'모델명', lot:'로트번호', asset_id:'자산번호' };
+  const el = document.getElementById(containerId);
+  el.innerHTML = fields.map(field => {
+    const detected = detectCol(cols, field);
+    const options  = ['(사용 안 함)', ...cols].map(c =>
+      `<option value="${c}" ${c === (detected || '') ? 'selected' : ''}>${c}</option>`
+    ).join('');
+    return `<div class="mb-2">
+      <label class="form-label mb-1 small fw-semibold">${labels[field]}</label>
+      <select class="form-select form-select-sm" id="${prefix}${field}">${options}</select>
+    </div>`;
+  }).join('');
+}
+
+function detectCol(cols, field) {
+  const kws = COL_KEYWORDS[field] || [];
+  for (const col of cols) {
+    const lower = col.toLowerCase().replace(/\s/g, '');
+    for (const kw of kws) {
+      if (lower.includes(kw.toLowerCase().replace(/\s/g, ''))) return col;
+    }
+  }
+  return null;
+}
+
+function getColSelection(prefix, fields) {
+  const map = {};
+  for (const f of fields) {
+    const el = document.getElementById(prefix + f);
+    map[f] = el ? el.value : '(사용 안 함)';
+  }
+  return map;
+}
+
+// ── 메인 실행 ─────────────────────────────────────
+function runCheck() {
+  if (!assetData.length)  { toast('자산 파일을 업로드해주세요.', 'warning'); return; }
+  if (!recallData.length) { toast('회수목록 파일을 업로드해주세요.', 'warning'); return; }
+
+  document.getElementById('spinner').style.display = 'flex';
+  document.getElementById('checkBtn').disabled = true;
+
+  // 비동기로 처리 (UI 블로킹 방지)
+  setTimeout(() => {
+    try {
+      const aMap = getColSelection('a_', ['name','maker','model','lot','asset_id']);
+      const rMap = getColSelection('r_', ['name','maker','model','lot']);
+      allMatches = matchAssets(assetData, recallData, aMap, rMap);
+      renderResults();
+    } catch(e) {
+      toast('오류: ' + e.message, 'danger');
+      console.error(e);
+    } finally {
+      document.getElementById('spinner').style.display = 'none';
+      document.getElementById('checkBtn').disabled = false;
+    }
+  }, 50);
+}
+
+// ── 매칭 알고리즘 ─────────────────────────────────
+const THRESHOLD_HIGH = 85;
+const THRESHOLD_LOW  = 65;
+
+function normalize(s) {
+  return String(s || '').trim().toUpperCase().replace(/[\s\-_]/g, '');
+}
+
+function strSimilarity(a, b) {
+  a = normalize(a); b = normalize(b);
+  if (!a || !b) return 0;
+  if (a === b)   return 100;
+  if (a.includes(b) || b.includes(a)) return 92;
+  return Math.round(fuseScore(a, b) * 100);
+}
+
+// Fuse.js를 이용한 유사도 (0~1 → 반전: score=0이 완전일치)
+function fuseScore(a, b) {
+  const fuse = new Fuse([b], { includeScore: true, threshold: 1.0 });
+  const res = fuse.search(a);
+  if (!res.length) return 0;
+  return Math.max(0, 1 - (res[0].score || 1));
+}
+
+function lotMatch(assetLot, recallLot) {
+  const a = normalize(assetLot);
+  const r = normalize(recallLot);
+  if (!a || !r) return true;  // 없으면 무시
+  if (a === r || a.includes(r) || r.includes(a)) return true;
+  // 범위 표현 (예: 001-050)
+  const m = r.match(/^(\d+)[~\-](\d+)$/);
+  if (m && /^\d+$/.test(a)) {
+    return parseInt(m[1]) <= parseInt(a) && parseInt(a) <= parseInt(m[2]);
+  }
+  return false;
+}
+
+function getVal(row, col) {
+  if (!col || col === '(사용 안 함)') return '';
+  return String(row[col] || '').trim();
+}
+
+function matchAssets(assets, recalls, aMap, rMap) {
+  const results = [];
+
+  for (const asset of assets) {
+    const aName  = getVal(asset, aMap.name);
+    const aMaker = getVal(asset, aMap.maker);
+    const aModel = getVal(asset, aMap.model);
+    const aLot   = getVal(asset, aMap.lot);
+    const aId    = getVal(asset, aMap.asset_id);
+
+    if (!aName) continue;
+
+    for (const recall of recalls) {
+      const rName  = getVal(recall, rMap.name);
+      const rMaker = getVal(recall, rMap.maker);
+      const rModel = getVal(recall, rMap.model);
+      const rLot   = getVal(recall, rMap.lot);
+
+      if (!rName) continue;
+
+      const sName  = strSimilarity(aName,  rName);
+      const sMaker = (aMaker && rMaker) ? strSimilarity(aMaker, rMaker) : 50;
+      const sModel = (aModel && rModel) ? strSimilarity(aModel, rModel) : 50;
+
+      // 가중 점수: 제품명 50% + 업체명 30% + 모델명 20%
+      const score = sName * 0.5 + sMaker * 0.3 + sModel * 0.2;
+
+      if (score < THRESHOLD_LOW) continue;
+      if (aLot && rLot && !lotMatch(aLot, rLot)) continue;
+
+      const reasons = [];
+      if (sName >= THRESHOLD_LOW)  reasons.push(`제품명 ${sName}%`);
+      if (sMaker >= THRESHOLD_LOW && aMaker && rMaker) reasons.push(`업체명 ${sMaker}%`);
+      if (sModel >= THRESHOLD_LOW && aModel && rModel) reasons.push(`모델명 ${sModel}%`);
+      if (aLot && rLot) reasons.push('로트번호 일치');
+
+      results.push({
+        asset:  { id: aId, name: aName, maker: aMaker, model: aModel, lot: aLot },
+        recall: {
+          name:  rName, maker: rMaker, model: rModel, lot: rLot,
+          grade: getVal(recall, detectAnyCol(recalls[0], ['회수등급','회수 등급','grade','rclsGrdNm'])),
+          reason:getVal(recall, detectAnyCol(recalls[0], ['회수사유','회수 사유','reason','rclsRsnNm'])),
+          date:  getVal(recall, detectAnyCol(recalls[0], ['공고일','공고 일','ntcDt','날짜'])),
+          due:   getVal(recall, detectAnyCol(recalls[0], ['회수기한','기한','dueDate'])),
+          no:    getVal(recall, detectAnyCol(recalls[0], ['공고번호','번호','ntcNo'])),
+        },
+        score: Math.round(score),
+        level: score >= THRESHOLD_HIGH ? 'HIGH' : 'LOW',
+        reasons,
+        rawAsset:  asset,
+        rawRecall: recall,
+      });
+    }
+  }
+
+  results.sort((a, b) => b.score - a.score);
+  return results;
+}
+
+function detectAnyCol(row, candidates) {
+  if (!row) return null;
+  const keys = Object.keys(row);
+  for (const c of candidates) {
+    const found = keys.find(k => k.toLowerCase().replace(/\s/g,'').includes(c.toLowerCase().replace(/\s/g,'')));
+    if (found) return found;
+  }
+  return null;
+}
+
+// ── 결과 렌더링 ───────────────────────────────────
+function renderResults() {
+  const high = allMatches.filter(m => m.level === 'HIGH').length;
+  const low  = allMatches.filter(m => m.level === 'LOW').length;
+
+  document.getElementById('stTotal').textContent   = assetData.length.toLocaleString();
+  document.getElementById('stRecalls').textContent = recallData.length.toLocaleString();
+  document.getElementById('stHigh').textContent    = high;
+  document.getElementById('stLow').textContent     = low;
+
+  document.getElementById('resultSection').style.display = '';
+
+  if (allMatches.length === 0) {
+    document.getElementById('noMatchAlert').style.display = 'flex';
+    document.getElementById('matchListWrap').style.display = 'none';
+  } else {
+    document.getElementById('noMatchAlert').style.display = 'none';
+    document.getElementById('matchListWrap').style.display = '';
+    filterList('all');
+  }
+}
+
+function filterList(level) {
+  currentFilter = level;
+  ['all','HIGH','LOW'].forEach(l => {
+    const id = l === 'all' ? 'btnAll' : l === 'HIGH' ? 'btnHigh' : 'btnLow';
+    document.getElementById(id).classList.toggle('active', l === level);
+  });
+  const list = level === 'all' ? allMatches : allMatches.filter(m => m.level === level);
+  renderMatchList(list);
+}
+
+function renderMatchList(matches) {
+  const el = document.getElementById('matchList');
+  if (!matches.length) {
+    el.innerHTML = '<div class="text-muted text-center py-3">해당 항목이 없습니다.</div>';
+    return;
+  }
+  el.innerHTML = matches.map((m, i) => {
+    const lc = m.level === 'HIGH' ? 'high' : 'low';
+    const lt = m.level === 'HIGH' ? '높은 가능성' : '검토 필요';
+    const reasons = m.reasons.join(' · ');
+    return `
+    <div class="card match-card level-${m.level} mb-3">
+      <div class="card-body">
+        <div class="d-flex gap-3">
+          <div class="score-ring ${lc}" title="매칭 점수">${m.score}</div>
+          <div class="flex-grow-1 min-w-0">
+            <div class="d-flex flex-wrap justify-content-between gap-1 mb-2">
+              <div>
+                <span class="badge bg-${m.level === 'HIGH' ? 'danger' : 'warning'} ${m.level === 'LOW' ? 'text-dark' : ''} me-1">${lt}</span>
+                <span class="text-muted small">${reasons}</span>
+              </div>
+              <a href="https://emedi.mfds.go.kr/recall/MNU20265" target="_blank" class="small text-primary">
+                <i class="bi bi-box-arrow-up-right me-1"></i>MFDS 확인
+              </a>
+            </div>
+            <div class="row g-2">
+              <div class="col-md-6">
+                <div class="p-2 rounded bg-light">
+                  <div class="small fw-semibold text-muted mb-1"><i class="bi bi-hospital me-1 text-primary"></i>병원 자산</div>
+                  ${infoTable([
+                    ['자산번호', m.asset.id],
+                    ['제품명',   m.asset.name],
+                    ['업체명',   m.asset.maker],
+                    ['모델명',   m.asset.model],
+                    ['로트번호', m.asset.lot],
+                  ])}
+                </div>
+              </div>
+              <div class="col-md-6">
+                <div class="p-2 rounded" style="background:#fff5f5">
+                  <div class="small fw-semibold text-danger mb-1"><i class="bi bi-exclamation-triangle me-1"></i>회수 정보 (MFDS)</div>
+                  ${infoTable([
+                    ['제품명',   m.recall.name],
+                    ['업체명',   m.recall.maker],
+                    ['모델명',   m.recall.model],
+                    ['로트번호', m.recall.lot],
+                    ['회수등급', m.recall.grade],
+                    ['회수사유', m.recall.reason],
+                    ['공고일',   m.recall.date],
+                    ['회수기한', m.recall.due],
+                  ])}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function infoTable(rows) {
+  return `<table class="table table-sm table-borderless mb-0" style="font-size:.82rem">` +
+    rows.filter(([,v]) => v).map(([k, v]) =>
+      `<tr><th class="text-muted pe-2 fw-normal" style="width:72px;white-space:nowrap">${k}</th><td>${v}</td></tr>`
+    ).join('') +
+  `</table>`;
+}
+
+// ── Excel 내보내기 ────────────────────────────────
+function exportExcel() {
+  const toExport = currentFilter === 'all' ? allMatches : allMatches.filter(m => m.level === currentFilter);
+  const rows = toExport.map(m => ({
+    '자산번호':     m.asset.id,
+    '자산_제품명':  m.asset.name,
+    '자산_업체명':  m.asset.maker,
+    '자산_모델명':  m.asset.model,
+    '자산_로트번호':m.asset.lot,
+    '매칭등급':     m.level,
+    '매칭점수':     m.score,
+    '매칭근거':     m.reasons.join(', '),
+    '회수_제품명':  m.recall.name,
+    '회수_업체명':  m.recall.maker,
+    '회수_모델명':  m.recall.model,
+    '회수_로트번호':m.recall.lot,
+    '회수등급':     m.recall.grade,
+    '회수사유':     m.recall.reason,
+    '공고일':       m.recall.date,
+    '회수기한':     m.recall.due,
+  }));
+
+  const ws = XLSX.utils.json_to_sheet(rows);
+  // 열 너비 자동 조정
+  ws['!cols'] = Object.keys(rows[0] || {}).map(() => ({ wch: 18 }));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, '회수대상자산');
+  XLSX.writeFile(wb, `회수대상자산_${new Date().toISOString().slice(0,10)}.xlsx`);
+}
+
+// ── 유틸 ─────────────────────────────────────────
+function toast(msg, type = 'info') {
+  let box = document.getElementById('toastBox');
+  if (!box) {
+    box = document.createElement('div');
+    box.id = 'toastBox';
+    box.style.cssText = 'position:fixed;bottom:1rem;right:1rem;z-index:9999;';
+    document.body.appendChild(box);
+  }
+  const id = 't' + Date.now();
+  box.insertAdjacentHTML('beforeend', `
+    <div id="${id}" class="toast align-items-center text-bg-${type} border-0 show mb-2">
+      <div class="d-flex">
+        <div class="toast-body">${msg}</div>
+        <button class="btn-close btn-close-white me-2 m-auto" onclick="document.getElementById('${id}').remove()"></button>
+      </div>
+    </div>`);
+  setTimeout(() => document.getElementById(id)?.remove(), 5000);
+}
+</script>
+</body>
+</html>

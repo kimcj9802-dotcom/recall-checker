@@ -1,0 +1,8 @@
+flask>=3.0
+pandas>=2.2
+openpyxl>=3.1
+selenium>=4.0
+webdriver-manager>=4.0
+thefuzz>=0.22
+python-Levenshtein>=0.25
+requests>=2.32

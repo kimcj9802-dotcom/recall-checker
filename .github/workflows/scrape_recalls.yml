@@ -1,0 +1,36 @@
+name: MFDS 회수목록 자동 수집
+
+on:
+  schedule:
+    - cron: '0 0 * * *'   # 매일 KST 오전 9시 (UTC 00:00)
+  workflow_dispatch:        # 수동 실행 버튼도 제공
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 코드 체크아웃
+        uses: actions/checkout@v4
+
+      - name: Python 설정
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: 패키지 설치
+        run: pip install selenium webdriver-manager requests
+
+      - name: Chrome 확인
+        run: google-chrome --version
+
+      - name: MFDS 회수목록 수집
+        run: python scrape_job.py
+
+      - name: 결과 커밋 & 푸시
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add cache/recalls.json
+          git diff --staged --quiet && echo "변경 없음" || git commit -m "chore: MFDS 회수목록 자동 갱신 $(date '+%Y-%m-%d')"
+          git push
