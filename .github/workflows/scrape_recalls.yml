@@ -26,14 +26,18 @@ jobs:
       - name: 패키지 설치
         run: pip install selenium webdriver-manager requests
 
-      - name: Chrome 확인
-        run: google-chrome --version
+      - name: Chrome 버전 확인
+        run: |
+          google-chrome --version
+          which google-chrome
 
       - name: cache 디렉터리 생성
         run: mkdir -p cache
 
       - name: MFDS 회수목록 수집
         run: python scrape_job.py
+        env:
+          CHROME_BIN: /usr/bin/google-chrome
 
       - name: 결과 커밋 & 푸시
         run: |

@@ -337,16 +337,24 @@ def _create_driver(chrome_opts):
 
     # ── 환경변수 Chrome 우선 (GitHub Actions / Linux) ──
     if _ENV_CHROME and os.path.exists(_ENV_CHROME):
+        chrome_opts.binary_location = _ENV_CHROME
+        # 1순위: selenium 내장 selenium-manager (4.6+, 버전 자동 매칭)
+        try:
+            driver = webdriver.Chrome(options=chrome_opts)
+            print(f"[scraper] Chrome 사용 - selenium-manager ({_ENV_CHROME})")
+            return driver
+        except Exception as e:
+            print(f"[scraper] selenium-manager 실패: {e}")
+        # 2순위: webdriver_manager
         try:
             from webdriver_manager.chrome import ChromeDriverManager
             from selenium.webdriver.chrome.service import Service
-            chrome_opts.binary_location = _ENV_CHROME
             service = Service(ChromeDriverManager().install())
             driver = webdriver.Chrome(service=service, options=chrome_opts)
-            print(f"[scraper] Chrome 사용 ({_ENV_CHROME})")
+            print(f"[scraper] Chrome 사용 - webdriver_manager ({_ENV_CHROME})")
             return driver
         except Exception as e:
-            print(f"[scraper] 환경변수 Chrome 실패: {e}")
+            print(f"[scraper] webdriver_manager 실패: {e}")
 
     # ── Edge 시도 (Windows 기본 내장) ──
     if os.path.exists(EDGE_BINARY):
