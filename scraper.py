@@ -519,16 +519,29 @@ def _fetch_from_github() -> list:
 
 # ── 공개 API ─────────────────────────────────────────────────
 def fetch_recall_data(force_refresh: bool = False) -> list:
-    # ── GitHub 캐시 우선 (GITHUB_CACHE_URL 환경변수가 있을 때) ──
-    if not force_refresh and os.environ.get("GITHUB_CACHE_URL"):
-        cached = _load_cache()
-        if cached is not None:
-            return cached
-        # 로컬 캐시 없으면 GitHub에서 받아옴
+    github_url = os.environ.get("GITHUB_CACHE_URL", "")
+
+    # ── 클라우드 환경 (GITHUB_CACHE_URL 설정 시): Selenium 미사용 ──
+    if github_url:
+        if not force_refresh:
+            cached = _load_cache()
+            if cached is not None:
+                return cached
+        # force_refresh이거나 로컬 캐시 없으면 GitHub에서 가져옴
         github_data = _fetch_from_github()
         if github_data:
             return github_data
+        # GitHub도 실패하면 만료 캐시라도
+        stale = _load_cache(ignore_expiry=True)
+        if stale:
+            print("[scraper] 만료 캐시 반환 (GitHub 캐시 로드 실패)")
+            return stale
+        raise RuntimeError(
+            "GitHub 캐시를 불러올 수 없습니다. "
+            "GitHub Actions 워크플로우(MFDS 회수목록 자동 수집)를 수동 실행해 주세요."
+        )
 
+    # ── 로컬 환경: requests → Selenium 순서로 시도 ──
     if not force_refresh:
         cached = _load_cache()
         if cached is not None:
