@@ -2,8 +2,8 @@ name: MFDS 회수목록 자동 수집
 
 on:
   schedule:
-    - cron: '0 0 * * *'   # 매일 KST 오전 9시 (UTC 00:00)
-  workflow_dispatch:        # 수동 실행 버튼도 제공
+    - cron: '0 0 * * *'
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -26,11 +26,6 @@ jobs:
       - name: 패키지 설치
         run: pip install selenium webdriver-manager requests
 
-      - name: Chrome 버전 확인
-        run: |
-          google-chrome --version
-          which google-chrome
-
       - name: cache 디렉터리 생성
         run: mkdir -p cache
 
@@ -43,12 +38,10 @@ jobs:
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          REMOTE="https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
-          git pull --rebase "$REMOTE" main
           git add cache/recalls.json
           if git diff --staged --quiet; then
-            echo "변경 없음 - 커밋 건너뜀"
+            echo "변경 없음"
           else
             git commit -m "chore: MFDS 회수목록 자동 갱신 $(date '+%Y-%m-%d')"
-            git push "$REMOTE" HEAD:main
+            git push --force-with-lease origin main
           fi
