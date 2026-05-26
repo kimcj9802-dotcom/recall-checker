@@ -1,10 +1,10 @@
 {
-  "cached_at": "2026-05-26T07:19:51.503764",
+  "cached_at": "2026-05-26T07:31:53.088435",
   "recalls": [
     {
       "deptReceiptNo": "202600102929",
       "보고일": "2026-05-23",
-      "상세링크": "https://emedi.mfds.go.kr/recall/view/MNU20265?startPlanSbmsnDt=2026-04-26&mid=MNU20265&searchYn=true&pageNum=1&endPlanSbmsnDt=2026-05-26&deptReceiptNo=202600102929",
+      "상세링크": "https://emedi.mfds.go.kr/recall/view/MNU20265?mid=MNU20265&searchYn=true&pageNum=1&&deptReceiptNo=202600102929",
       "순번": "1",
       "업체명": "지이헬스케어코리아(주)",
       "회수구분": "영업자 회수보고",
@@ -13,10 +13,21 @@
       "회수진행여부": "진행중"
     },
     {
+      "deptReceiptNo": "202600101282",
+      "보고일": "2026-05-21",
+      "상세링크": "https://emedi.mfds.go.kr/recall/view/MNU20265?mid=MNU20265&pageNum=1&&deptReceiptNo=202600101282",
+      "순번": "2",
+      "업체명": "주식회사 에스에스힐",
+      "회수구분": "정부 회수보고",
+      "품목명": "국소 지혈용 드레싱",
+      "허가번호": "제인 23-4981 호",
+      "회수진행여부": "진행중"
+    },
+    {
       "deptReceiptNo": "202600101220",
       "보고일": "2026-05-21",
-      "상세링크": "https://emedi.mfds.go.kr/recall/view/MNU20265?startPlanSbmsnDt=2026-04-26&mid=MNU20265&pageNum=1&endPlanSbmsnDt=2026-05-26&deptReceiptNo=202600101220",
-      "순번": "2",
+      "상세링크": "https://emedi.mfds.go.kr/recall/view/MNU20265?mid=MNU20265&pageNum=1&&deptReceiptNo=202600101220",
+      "순번": "3",
       "업체명": "비브라운코리아(주)",
       "회수구분": "영업자 회수보고",
       "품목명": "전동식 의료용 핸드피스",
@@ -26,8 +37,8 @@
     {
       "deptReceiptNo": "202600096535",
       "보고일": "2026-05-17",
-      "상세링크": "https://emedi.mfds.go.kr/recall/view/MNU20265?startPlanSbmsnDt=2026-04-26&mid=MNU20265&pageNum=1&endPlanSbmsnDt=2026-05-26&deptReceiptNo=202600096535",
-      "순번": "3",
+      "상세링크": "https://emedi.mfds.go.kr/recall/view/MNU20265?mid=MNU20265&pageNum=1&&deptReceiptNo=202600096535",
+      "순번": "4",
       "업체명": "지이헬스케어코리아(주)",
       "회수구분": "영업자 회수보고",
       "품목명": "거치형보육기",
@@ -37,8 +48,8 @@
     {
       "deptReceiptNo": "202600094188",
       "보고일": "2026-05-14",
-      "상세링크": "https://emedi.mfds.go.kr/recall/view/MNU20265?startPlanSbmsnDt=2026-04-26&mid=MNU20265&pageNum=1&endPlanSbmsnDt=2026-05-26&deptReceiptNo=202600094188",
-      "순번": "4",
+      "상세링크": "https://emedi.mfds.go.kr/recall/view/MNU20265?mid=MNU20265&pageNum=1&&deptReceiptNo=202600094188",
+      "순번": "5",
       "업체명": "메드트로닉코리아(유)",
       "회수구분": "영업자 회수보고",
       "품목명": "이동형 엑스선 투시 촬영장치",
@@ -48,8 +59,8 @@
     {
       "deptReceiptNo": "202600090561",
       "보고일": "2026-05-07",
-      "상세링크": "https://emedi.mfds.go.kr/recall/view/MNU20265?startPlanSbmsnDt=2026-04-26&mid=MNU20265&pageNum=1&endPlanSbmsnDt=2026-05-26&deptReceiptNo=202600090561",
-      "순번": "5",
+      "상세링크": "https://emedi.mfds.go.kr/recall/view/MNU20265?mid=MNU20265&pageNum=1&&deptReceiptNo=202600090561",
+      "순번": "6",
       "업체명": "동방헬스다인(주)",
       "회수구분": "영업자 회수보고",
       "품목명": "의료용압력계",
@@ -59,8 +70,8 @@
     {
       "deptReceiptNo": "202600089217",
       "보고일": "2026-05-06",
-      "상세링크": "https://emedi.mfds.go.kr/recall/view/MNU20265?startPlanSbmsnDt=2026-04-26&mid=MNU20265&pageNum=1&endPlanSbmsnDt=2026-05-26&deptReceiptNo=202600089217",
-      "순번": "6",
+      "상세링크": "https://emedi.mfds.go.kr/recall/view/MNU20265?mid=MNU20265&pageNum=1&&deptReceiptNo=202600089217",
+      "순번": "7",
       "업체명": "지이헬스케어코리아(주)",
       "회수구분": "영업자 회수보고",
       "품목명": "부하 심전도 장치",
@@ -70,8 +81,8 @@
     {
       "deptReceiptNo": "202600088747",
       "보고일": "2026-05-07",
-      "상세링크": "https://emedi.mfds.go.kr/recall/view/MNU20265?startPlanSbmsnDt=2026-04-26&mid=MNU20265&pageNum=1&endPlanSbmsnDt=2026-05-26&deptReceiptNo=202600088747",
-      "순번": "7",
+      "상세링크": "https://emedi.mfds.go.kr/recall/view/MNU20265?mid=MNU20265&pageNum=1&&deptReceiptNo=202600088747",
+      "순번": "8",
       "업체명": "보스톤사이언티픽코리아(주)",
       "회수구분": "영업자 회수보고",
       "품목명": "의료용고주파열상발생기",
@@ -79,43 +90,26 @@
       "회수진행여부": "진행중"
     },
     {
+      "deptReceiptNo": "202600087045",
+      "보고일": "2026-04-30",
+      "상세링크": "https://emedi.mfds.go.kr/recall/view/MNU20265?mid=MNU20265&pageNum=1&&deptReceiptNo=202600087045",
+      "순번": "9",
+      "업체명": "지이헬스케어코리아(주)",
+      "회수구분": "영업자 회수보고",
+      "품목명": "거치형 디지털식 순환기용 엑스선 투시 진단장치",
+      "허가번호": "수인 23-315 호",
+      "회수진행여부": "진행중"
+    },
+    {
       "deptReceiptNo": "202600086047",
       "보고일": "2026-04-30",
-      "상세링크": "https://emedi.mfds.go.kr/recall/view/MNU20265?startPlanSbmsnDt=2026-04-26&mid=MNU20265&pageNum=1&endPlanSbmsnDt=2026-05-26&deptReceiptNo=202600086047",
-      "순번": "8",
+      "상세링크": "https://emedi.mfds.go.kr/recall/view/MNU20265?mid=MNU20265&pageNum=1&&deptReceiptNo=202600086047",
+      "순번": "10",
       "업체명": "한국드레가(주)",
       "회수구분": "영업자 회수보고",
       "품목명": "가스 마취기",
       "허가번호": "수허 21-106 호",
       "회수진행여부": "진행중"
-    },
-    {
-      "deptReceiptNo": "202600085342",
-      "보고일": "2026-04-29",
-      "상세링크": "https://emedi.mfds.go.kr/recall/view/MNU20265?startPlanSbmsnDt=2026-04-26&mid=MNU20265&pageNum=1&endPlanSbmsnDt=2026-05-26&deptReceiptNo=202600085342",
-      "순번": "9",
-      "업체명": "(주)필립스코리아",
-      "회수구분": "영업자 회수보고",
-      "품목명": "거치형 디지털식 순환기용 엑스선 투시 진단장치",
-      "허가번호": "수인 17-561 호",
-      "회수진행여부": "진행중"
-    },
-    {
-      "deptReceiptNo": "202600085061",
-      "보고일": "2026-04-29",
-      "상세링크": "https://emedi.mfds.go.kr/recall/view/MNU20265?startPlanSbmsnDt=2026-04-26&mid=MNU20265&pageNum=1&endPlanSbmsnDt=2026-05-26&deptReceiptNo=202600085061",
-      "순번": "10",
-      "업체명": "바이오플러스(주)",
-      "회수구분": "영업자 회수보고",
-      "품목명": "조직수복용생체재료",
-      "허가번호": "제허 21-911 호",
-      "회수진행여부": "진행중"
-    },
-    {
-      "사용(유효)기한": "해당없음",
-      "품목명": "202600101220\n                                            전동식 의료용 핸드피스",
-      "품목허가(인증)번호": "수인25-4494호",
-      "회수대상량": "1"
     }
   ]
 }
