@@ -328,8 +328,8 @@ def _try_selenium() -> list:
 
                 pager.click()
 
-                # 테이블 내용이 바뀔 때까지 최대 8초 대기
-                for _ in range(16):
+                # 1단계: 첫 행이 바뀔 때까지 대기 (페이지 전환 시작 감지)
+                for _ in range(20):
                     time.sleep(0.5)
                     first_row_after = driver.execute_script("""
                         const tr = document.querySelector('table tbody tr');
@@ -337,6 +337,17 @@ def _try_selenium() -> list:
                     """)
                     if first_row_after and first_row_after != first_row_before:
                         break
+
+                # 2단계: 행 수가 안정될 때까지 추가 대기 (AJAX 완전 로드)
+                prev_count = 0
+                for _ in range(10):
+                    time.sleep(0.5)
+                    curr_count = driver.execute_script(
+                        "return document.querySelectorAll('table tbody tr').length"
+                    )
+                    if curr_count > 0 and curr_count == prev_count:
+                        break
+                    prev_count = curr_count
 
                 new_items = _parse_driver_table(driver)
                 if not new_items:
