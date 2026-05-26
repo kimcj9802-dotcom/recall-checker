@@ -255,9 +255,9 @@ def _try_selenium() -> list:
             except Exception:
                 continue
 
-        # 날짜 입력 (최근 5년)
+        # 날짜 입력 (최근 1개월)
         end_date   = datetime.now().strftime("%Y-%m-%d")
-        start_date = (datetime.now() - timedelta(days=365 * 5)).strftime("%Y-%m-%d")
+        start_date = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
         driver.execute_script(f"""
             // 시작일·종료일 input에 날짜 설정 (다양한 id/name 패턴 시도)
             const startSelectors = ['[name*="start" i]','[name*="bgn" i]','[name*="strt" i]','[id*="start" i]','[id*="bgn" i]'];
@@ -297,26 +297,57 @@ def _try_selenium() -> list:
 
         # 렌더링된 HTML 테이블 파싱
         recalls = _parse_driver_table(driver)
+        print(f"[scraper] 1페이지: {len(recalls)}건")
 
-        # 페이지네이션
+        # 페이지네이션 — 테이블 내용 변경을 감지해 안정적으로 수집
         page_num = 2
         while page_num <= 100:
             try:
-                pager = driver.find_elements(
-                    By.XPATH,
-                    f"//a[contains(@onclick,'{page_num}') or normalize-space(text())='{page_num}']"
-                )
-                pager = [p for p in pager if p.is_displayed()]
+                # 현재 첫 번째 행 텍스트 기억 (페이지 전환 감지용)
+                first_row_before = driver.execute_script("""
+                    const tr = document.querySelector('table tbody tr');
+                    return tr ? tr.innerText.trim() : '';
+                """)
+
+                # 페이지 링크 탐색 (여러 패턴)
+                pager = None
+                for xpath in [
+                    f"//a[normalize-space(text())='{page_num}' and (contains(@onclick,'page') or contains(@href,'page') or @href='#')]",
+                    f"//a[normalize-space(text())='{page_num}']",
+                    f"//span[normalize-space(text())='{page_num}']/parent::a",
+                    f"//*[contains(@onclick,'{page_num}') and (self::a or self::button)]",
+                ]:
+                    els = [e for e in driver.find_elements(By.XPATH, xpath) if e.is_displayed()]
+                    if els:
+                        pager = els[0]
+                        break
+
                 if not pager:
+                    print(f"[scraper] {page_num}페이지 링크 없음 — 종료")
                     break
-                pager[0].click()
-                time.sleep(2)
+
+                pager.click()
+
+                # 테이블 내용이 바뀔 때까지 최대 8초 대기
+                for _ in range(16):
+                    time.sleep(0.5)
+                    first_row_after = driver.execute_script("""
+                        const tr = document.querySelector('table tbody tr');
+                        return tr ? tr.innerText.trim() : '';
+                    """)
+                    if first_row_after and first_row_after != first_row_before:
+                        break
+
                 new_items = _parse_driver_table(driver)
                 if not new_items:
+                    print(f"[scraper] {page_num}페이지 데이터 없음 — 종료")
                     break
+
+                print(f"[scraper] {page_num}페이지: {len(new_items)}건")
                 recalls.extend(new_items)
                 page_num += 1
-            except Exception:
+            except Exception as e:
+                print(f"[scraper] 페이지네이션 오류: {e}")
                 break
 
         return recalls
