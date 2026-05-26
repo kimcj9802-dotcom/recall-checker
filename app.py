@@ -14,16 +14,21 @@ app.config["MAX_CONTENT_LENGTH"] = 20 * 1024 * 1024  # 20MB
 
 
 def _filter_active_recalls(recalls: list, months: int = 2) -> list:
-    """진행중이고 최근 N개월 이내인 회수 목록만 반환"""
+    """진행중이고 최근 N개월 이내인 회수 목록만 반환 (빈 레코드 제외)"""
     cutoff = datetime.now() - timedelta(days=months * 30)
     result = []
     for r in recalls:
-        # 1) 회수진행여부: '진행' 포함 항목만
-        status = r.get("회수진행여부", "")
-        if status and "진행" not in status:
+        # 0) 품목명이 없는 빈 레코드 제외
+        name = (r.get("품목명") or r.get("제품명", "")).strip()
+        if not name or name in ("-", "None", "nan"):
             continue
 
-        # 2) 보고일: 최근 2개월 이내 (날짜가 없으면 통과)
+        # 1) 회수진행여부: '진행' 포함 항목만 (값이 없으면 통과)
+        status = r.get("회수진행여부", "").strip()
+        if status and status != "-" and "진행" not in status:
+            continue
+
+        # 2) 보고일: 최근 N개월 이내 (날짜가 없으면 통과)
         date_str = (r.get("보고일") or r.get("보고일자", "")).strip()
         if date_str and date_str != "-":
             parsed = None

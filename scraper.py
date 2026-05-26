@@ -496,7 +496,9 @@ def _normalize_items(items: list) -> list:
         for k, v in item.items():
             mapped = _FIELD_MAP.get(str(k).strip(), str(k).strip())
             n[mapped] = str(v).strip() if v is not None else ""
-        if any(v for v in n.values()):
+        # 품목명(제품명)이 없는 빈 레코드 제외
+        name = n.get("품목명", "") or n.get("제품명", "")
+        if name and name not in ("-", "None", "nan"):
             result.append(n)
     return result
 
