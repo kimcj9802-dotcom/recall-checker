@@ -440,7 +440,7 @@ async function loadCacheInfo() {
         ? '<span class="badge bg-warning text-dark ms-1">만료</span>'
         : '<span class="badge bg-success ms-1">최신</span>';
       const filteredInfo = d.filtered_count !== undefined
-        ? ` <span class="text-muted small">(진행중·2개월: ${d.filtered_count}건 / 전체 캐시: ${d.count.toLocaleString()}건)</span>`
+        ? ` <span class="text-muted small">(최근1개월: ${d.filtered_count}건 / 전체 캐시: ${d.count.toLocaleString()}건)</span>`
         : ` <span class="text-muted small">(전체: ${d.count.toLocaleString()}건)</span>`;
       el.innerHTML = `${d.cached_at} 기준${badge}${filteredInfo}`;
     } else {

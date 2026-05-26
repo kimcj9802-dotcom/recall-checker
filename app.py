@@ -13,9 +13,9 @@ app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 20 * 1024 * 1024  # 20MB
 
 
-def _filter_active_recalls(recalls: list, months: int = 2) -> list:
-    """진행중이고 최근 N개월 이내인 회수 목록만 반환 (빈 레코드 제외)"""
-    cutoff = datetime.now() - timedelta(days=months * 30)
+def _filter_active_recalls(recalls: list, days: int = 30) -> list:
+    """최근 N일 이내 보고일자 기준 회수 목록 반환 (회수진행여부 전체, 빈 레코드 제외)"""
+    cutoff = datetime.now() - timedelta(days=days)
     result = []
     for r in recalls:
         # 0) 품목명 + 업체명 둘 다 없으면 빈 레코드로 제외
@@ -25,12 +25,7 @@ def _filter_active_recalls(recalls: list, months: int = 2) -> list:
                 or not maker or maker in ("-", "None", "nan")):
             continue
 
-        # 1) 회수진행여부: '진행' 포함 항목만 (값이 없으면 통과)
-        status = r.get("회수진행여부", "").strip()
-        if status and status != "-" and "진행" not in status:
-            continue
-
-        # 2) 보고일: 최근 N개월 이내 (날짜가 없으면 통과)
+        # 1) 보고일: 최근 N일 이내 (날짜가 없으면 통과)
         date_str = (r.get("보고일") or r.get("보고일자", "")).strip()
         if date_str and date_str != "-":
             parsed = None
