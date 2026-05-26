@@ -439,7 +439,10 @@ async function loadCacheInfo() {
       const badge = d.expired
         ? '<span class="badge bg-warning text-dark ms-1">만료</span>'
         : '<span class="badge bg-success ms-1">최신</span>';
-      el.innerHTML = `${d.cached_at} 기준 ${d.count.toLocaleString()}건${badge}`;
+      const filteredInfo = d.filtered_count !== undefined
+        ? ` <span class="text-muted small">(진행중·2개월: ${d.filtered_count}건 / 전체 캐시: ${d.count.toLocaleString()}건)</span>`
+        : ` <span class="text-muted small">(전체: ${d.count.toLocaleString()}건)</span>`;
+      el.innerHTML = `${d.cached_at} 기준${badge}${filteredInfo}`;
     } else {
       el.innerHTML = '<span class="text-warning">캐시 없음 — [회수목록 갱신]을 먼저 실행하거나 확인 시 자동 조회됩니다.</span>';
     }

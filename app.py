@@ -129,7 +129,15 @@ def index():
 
 @app.route("/api/cache-info")
 def cache_info():
-    return jsonify({**get_cache_info(), "refresh_running": _refresh_state["running"]})
+    info = get_cache_info()
+    # 필터 적용 후 실제 표시 건수도 함께 반환
+    try:
+        all_recalls = fetch_recall_data()
+        filtered = _filter_active_recalls(all_recalls)
+        info["filtered_count"] = len(filtered)
+    except Exception:
+        info["filtered_count"] = 0
+    return jsonify({**info, "refresh_running": _refresh_state["running"]})
 
 
 @app.route("/api/refresh-recalls", methods=["POST"])
