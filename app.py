@@ -18,9 +18,11 @@ def _filter_active_recalls(recalls: list, months: int = 2) -> list:
     cutoff = datetime.now() - timedelta(days=months * 30)
     result = []
     for r in recalls:
-        # 0) 품목명이 없는 빈 레코드 제외
+        # 0) 품목명 + 업체명 둘 다 없으면 빈 레코드로 제외
         name = (r.get("품목명") or r.get("제품명", "")).strip()
-        if not name or name in ("-", "None", "nan"):
+        maker = r.get("업체명", "").strip()
+        if (not name or name in ("-", "None", "nan")
+                or not maker or maker in ("-", "None", "nan")):
             continue
 
         # 1) 회수진행여부: '진행' 포함 항목만 (값이 없으면 통과)
