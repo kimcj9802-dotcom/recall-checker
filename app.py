@@ -18,11 +18,9 @@ def _filter_active_recalls(recalls: list, days: int = 30) -> list:
     cutoff = datetime.now() - timedelta(days=days)
     result = []
     for r in recalls:
-        # 0) 품목명 + 업체명 둘 다 없으면 빈 레코드로 제외
+        # 0) 품목명이 없는 빈 레코드 제외
         name = (r.get("품목명") or r.get("제품명", "")).strip()
-        maker = r.get("업체명", "").strip()
-        if (not name or name in ("-", "None", "nan")
-                or not maker or maker in ("-", "None", "nan")):
+        if not name or name in ("-", "None", "nan"):
             continue
 
         # 1) 보고일: 최근 N일 이내 (날짜가 없으면 통과)
