@@ -236,59 +236,25 @@ def _try_selenium() -> list:
 
     driver = _create_driver(opts)
     try:
-        print("[scraper] Selenium으로 MFDS 접속 중...")
-        driver.get(RECALL_URL)
+        # 날짜 파라미터를 URL에 직접 포함해 이동 (검색 버튼 클릭 불필요)
+        end_date   = datetime.now().strftime("%Y-%m-%d")
+        start_date = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
+        search_url = (
+            f"{RECALL_URL}?searchYn=true&mid=MNU20265"
+            f"&startPlanSbmsnDt={start_date}&endPlanSbmsnDt={end_date}"
+            f"&pageIndex=1&pageUnit=10"
+        )
+        print(f"[scraper] MFDS 접속: {start_date} ~ {end_date}")
+        driver.get(search_url)
 
         wait = WebDriverWait(driver, 20)
 
-        # 검색 버튼 찾기 — 여러 패턴 시도
-        search_btn = None
-        for selector in [
-            (By.XPATH, "//button[contains(., '검색')]"),
-            (By.XPATH, "//input[@type='button' and @value='검색']"),
-            (By.XPATH, "//a[contains(., '검색') and not(contains(., '재검색'))]"),
-            (By.CSS_SELECTOR, "button.btn-search, button.search-btn, .btn_search"),
-        ]:
-            try:
-                search_btn = wait.until(EC.element_to_be_clickable(selector))
-                break
-            except Exception:
-                continue
-
-        # 날짜 입력 (최근 1개월)
-        end_date   = datetime.now().strftime("%Y-%m-%d")
-        start_date = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
-        driver.execute_script(f"""
-            // 시작일·종료일 input에 날짜 설정 (다양한 id/name 패턴 시도)
-            const startSelectors = ['[name*="start" i]','[name*="bgn" i]','[name*="strt" i]','[id*="start" i]','[id*="bgn" i]'];
-            const endSelectors   = ['[name*="end" i]',  '[name*="cls" i]', '[name*="fnsh" i]','[id*="end" i]',  '[id*="cls" i]'];
-            function setVal(sels, val) {{
-                for (const s of sels) {{
-                    for (const el of document.querySelectorAll(s)) {{
-                        if (el.type === 'text' || el.type === 'date') {{
-                            el.value = val;
-                            el.dispatchEvent(new Event('change', {{bubbles:true}}));
-                            return true;
-                        }}
-                    }}
-                }}
-                return false;
-            }}
-            setVal(startSelectors, '{start_date}');
-            setVal(endSelectors,   '{end_date}');
-        """)
-
-        if search_btn:
-            print("[scraper] 검색 버튼 클릭")
-            search_btn.click()
-        else:
-            try:
-                driver.execute_script("document.querySelector('form').submit()")
-            except Exception:
-                pass
-
-        # 결과 로딩 대기
-        time.sleep(3)
+        # 테이블에 행이 생길 때까지 대기
+        try:
+            wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "table tbody tr")))
+        except Exception:
+            pass
+        time.sleep(2)
 
         # 네트워크 로그에서 API 엔드포인트 + 데이터 캡처
         api_data = _capture_from_network_logs(driver)
