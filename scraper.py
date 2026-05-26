@@ -300,15 +300,20 @@ def _try_selenium() -> list:
                 if first_row_after != first_row_before:
                     break
 
-            # 행 수 안정화 대기
-            prev_count = 0
-            for _ in range(10):
+            # 행 수가 연속 3회 동일할 때까지 대기 (AJAX 완전 로드 확인)
+            prev_count = -1
+            stable = 0
+            for _ in range(30):
                 time.sleep(0.5)
                 curr_count = driver.execute_script(
                     "return document.querySelectorAll('table tbody tr').length"
                 )
                 if curr_count > 0 and curr_count == prev_count:
-                    break
+                    stable += 1
+                    if stable >= 3:
+                        break
+                else:
+                    stable = 0
                 prev_count = curr_count
 
             new_items = _parse_driver_table(driver)
