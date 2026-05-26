@@ -265,67 +265,31 @@ def _try_selenium() -> list:
         recalls = _parse_driver_table(driver)
         print(f"[scraper] 1페이지: {len(recalls)}건")
 
-        # 페이지네이션 — 테이블 내용 변경을 감지해 안정적으로 수집
+        # 페이지네이션 — pageIndex를 URL에 직접 넣어 이동 (날짜 파라미터 유지)
         page_num = 2
         while page_num <= 100:
+            page_url = (
+                f"{RECALL_URL}?searchYn=true&mid=MNU20265"
+                f"&startPlanSbmsnDt={start_date}&endPlanSbmsnDt={end_date}"
+                f"&pageIndex={page_num}&pageUnit=10"
+            )
+            driver.get(page_url)
+
+            # 테이블 행 로딩 대기
             try:
-                # 현재 첫 번째 행 텍스트 기억 (페이지 전환 감지용)
-                first_row_before = driver.execute_script("""
-                    const tr = document.querySelector('table tbody tr');
-                    return tr ? tr.innerText.trim() : '';
-                """)
+                wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "table tbody tr")))
+            except Exception:
+                pass
+            time.sleep(2)
 
-                # 페이지 링크 탐색 (여러 패턴)
-                pager = None
-                for xpath in [
-                    f"//a[normalize-space(text())='{page_num}' and (contains(@onclick,'page') or contains(@href,'page') or @href='#')]",
-                    f"//a[normalize-space(text())='{page_num}']",
-                    f"//span[normalize-space(text())='{page_num}']/parent::a",
-                    f"//*[contains(@onclick,'{page_num}') and (self::a or self::button)]",
-                ]:
-                    els = [e for e in driver.find_elements(By.XPATH, xpath) if e.is_displayed()]
-                    if els:
-                        pager = els[0]
-                        break
-
-                if not pager:
-                    print(f"[scraper] {page_num}페이지 링크 없음 — 종료")
-                    break
-
-                pager.click()
-
-                # 1단계: 첫 행이 바뀔 때까지 대기 (페이지 전환 시작 감지)
-                for _ in range(20):
-                    time.sleep(0.5)
-                    first_row_after = driver.execute_script("""
-                        const tr = document.querySelector('table tbody tr');
-                        return tr ? tr.innerText.trim() : '';
-                    """)
-                    if first_row_after and first_row_after != first_row_before:
-                        break
-
-                # 2단계: 행 수가 안정될 때까지 추가 대기 (AJAX 완전 로드)
-                prev_count = 0
-                for _ in range(10):
-                    time.sleep(0.5)
-                    curr_count = driver.execute_script(
-                        "return document.querySelectorAll('table tbody tr').length"
-                    )
-                    if curr_count > 0 and curr_count == prev_count:
-                        break
-                    prev_count = curr_count
-
-                new_items = _parse_driver_table(driver)
-                if not new_items:
-                    print(f"[scraper] {page_num}페이지 데이터 없음 — 종료")
-                    break
-
-                print(f"[scraper] {page_num}페이지: {len(new_items)}건")
-                recalls.extend(new_items)
-                page_num += 1
-            except Exception as e:
-                print(f"[scraper] 페이지네이션 오류: {e}")
+            new_items = _parse_driver_table(driver)
+            if not new_items:
+                print(f"[scraper] {page_num}페이지 데이터 없음 — 종료")
                 break
+
+            print(f"[scraper] {page_num}페이지: {len(new_items)}건")
+            recalls.extend(new_items)
+            page_num += 1
 
         return recalls
     finally:
