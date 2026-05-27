@@ -304,6 +304,32 @@ def _try_selenium() -> list:
             time.sleep(3)
 
             items = _parse_driver_table(driver)
+            print(f"[scraper] 구간{chunk_num} 원본: {len(items)}건 파싱")
+
+            # ── 클라이언트 측 날짜 필터 (서버 필터 보완) ──
+            # 보고일이 이 구간 범위 안에 있는 항목만 유지
+            # 보고일 없거나 파싱 실패 시 포함(제외하지 않음)
+            filtered = []
+            for item in items:
+                date_str = item.get("보고일", "").strip()
+                if date_str and date_str not in ("-", "None", "nan"):
+                    parsed_d = None
+                    for fmt in ("%Y-%m-%d", "%Y.%m.%d", "%Y/%m/%d"):
+                        try:
+                            parsed_d = datetime.strptime(date_str[:10], fmt)
+                            break
+                        except ValueError:
+                            continue
+                    if parsed_d:
+                        if chunk_start <= parsed_d <= chunk_end:
+                            filtered.append(item)
+                        else:
+                            print(f"[scraper]   날짜 범위 외 제외: {date_str} ({item.get('품목명','')})")
+                        continue
+                # 날짜 없거나 파싱 불가 → 포함
+                filtered.append(item)
+            items = filtered
+            print(f"[scraper] 구간{chunk_num} 날짜필터 후: {len(items)}건")
 
             # 중복 제거 (deptReceiptNo 기준)
             new_cnt = 0
