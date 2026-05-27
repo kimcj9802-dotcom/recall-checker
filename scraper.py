@@ -242,7 +242,7 @@ def _try_selenium() -> list:
         search_url = (
             f"{RECALL_URL}?searchYn=true&mid=MNU20265"
             f"&startPlanSbmsnDt={start_date}&endPlanSbmsnDt={end_date}"
-            f"&pageIndex=1&pageUnit=10"
+            f"&pageIndex=1&pageUnit=100"
         )
         print(f"[scraper] MFDS 접속: {start_date} ~ {end_date}")
         driver.get(search_url)
@@ -261,66 +261,9 @@ def _try_selenium() -> list:
         if api_data:
             return api_data
 
-        # 1페이지 DOM 파싱
+        # 전체 데이터 한 번에 파싱 (pageUnit=100으로 페이지네이션 불필요)
         recalls = _parse_driver_table(driver)
-        print(f"[scraper] 1페이지: {len(recalls)}건")
-
-        # Selenium 쿠키 추출 → requests로 2페이지~ API 호출 (날짜 필터 유지)
-        cookies = {c["name"]: c["value"] for c in driver.get_cookies()}
-        api_headers = {
-            **_HEADERS,
-            "X-Requested-With": "XMLHttpRequest",
-            "Referer": RECALL_URL,
-        }
-        base_params = {
-            "searchYn": "true",
-            "mid": "MNU20265",
-            "startPlanSbmsnDt": start_date,
-            "endPlanSbmsnDt":   end_date,
-            "pageUnit": "10",
-            "searchGbn": "", "searchWrd": "",
-            "rcllPrgYn": "", "govCorpGbn": "",
-        }
-
-        page_num = 2
-        while page_num <= 100:
-            params = {**base_params, "pageIndex": str(page_num), "pageNum": str(page_num)}
-            page_data = []
-
-            for ep in _SEARCH_ENDPOINTS:
-                for method in ("post", "get"):
-                    try:
-                        fn = getattr(requests, method)
-                        kw = {"data": params} if method == "post" else {"params": params}
-                        r = fn(
-                            f"{BASE_URL}{ep}", cookies=cookies,
-                            headers=api_headers, timeout=15, **kw
-                        )
-                        if r.status_code != 200:
-                            continue
-                        ct = r.headers.get("content-type", "")
-                        if "json" in ct:
-                            items = _extract_list(r.json())
-                            if items:
-                                page_data = _normalize_items(items)
-                                break
-                        elif "html" in ct:
-                            rows = _parse_html(r.text)
-                            if rows:
-                                page_data = rows
-                                break
-                    except Exception:
-                        pass
-                if page_data:
-                    break
-
-            if not page_data:
-                print(f"[scraper] {page_num}페이지 종료")
-                break
-
-            print(f"[scraper] {page_num}페이지: {len(page_data)}건")
-            recalls.extend(page_data)
-            page_num += 1
+        print(f"[scraper] 수집: {len(recalls)}건")
 
         return recalls
     finally:
