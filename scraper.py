@@ -236,62 +236,51 @@ def _try_selenium() -> list:
 
     driver = _create_driver(opts)
     try:
-        # 날짜 파라미터를 URL에 직접 포함해 이동 (검색 버튼 클릭 불필요)
-        end_date   = datetime.now().strftime("%Y-%m-%d")
-        start_date = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
-        search_url = (
-            f"{RECALL_URL}?searchYn=true&mid=MNU20265"
-            f"&startPlanSbmsnDt={start_date}&endPlanSbmsnDt={end_date}"
-            f"&pageIndex=1&pageUnit=10"
-        )
-        print(f"[scraper] MFDS 접속: {start_date} ~ {end_date}")
-        driver.get(search_url)
-
         wait = WebDriverWait(driver, 20)
+        # 30일을 15일씩 나눠 조회 → 각 구간 최대 ~7건으로 페이지네이션 불필요
+        end_dt   = datetime.now()
+        start_dt = end_dt - timedelta(days=30)
+        chunk_days = 10
 
-        # 테이블에 행이 생길 때까지 대기
-        try:
-            wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "table tbody tr")))
-        except Exception:
-            pass
-        time.sleep(2)
+        seen_dnos = set()
+        recalls   = []
 
-        # 네트워크 로그에서 실제 API 엔드포인트 탐지
-        api_endpoint, api_method, api_raw_params, api_cookies = _find_list_api(driver)
+        chunk_start = start_dt
+        chunk_num   = 1
+        while chunk_start < end_dt:
+            chunk_end = min(chunk_start + timedelta(days=chunk_days), end_dt)
+            cs = chunk_start.strftime("%Y-%m-%d")
+            ce = chunk_end.strftime("%Y-%m-%d")
 
-        # 1페이지 DOM 파싱
-        recalls = _parse_driver_table(driver)
-        print(f"[scraper] 1페이지: {len(recalls)}건")
-
-        # 2페이지~: Selenium으로 직접 접속 (세션 유지, 날짜 필터 보존)
-        page_num = 2
-        while page_num <= 100:
-            page_url = (
+            url = (
                 f"{RECALL_URL}?searchYn=true&mid=MNU20265"
-                f"&startPlanSbmsnDt={start_date}&endPlanSbmsnDt={end_date}"
-                f"&pageIndex={page_num}&pageUnit=10"
+                f"&startPlanSbmsnDt={cs}&endPlanSbmsnDt={ce}"
+                f"&pageIndex=1&pageUnit=10"
             )
-            driver.get(page_url)
+            print(f"[scraper] 구간{chunk_num}: {cs} ~ {ce}")
+            driver.get(url)
 
-            # 테이블 td가 3개 이상 생길 때까지 최대 15초 대기
-            deadline = time.time() + 15
-            while time.time() < deadline:
-                td_count = driver.execute_script(
-                    "return document.querySelectorAll('table tbody tr td').length"
-                )
-                if td_count >= 3:
-                    break
-                time.sleep(0.5)
-            time.sleep(1)  # 렌더링 마무리 대기
+            try:
+                wait.until(EC.presence_of_element_located(
+                    (By.CSS_SELECTOR, "table tbody tr")))
+            except Exception:
+                pass
+            time.sleep(2)
 
-            new_items = _parse_driver_table(driver)
-            if not new_items:
-                print(f"[scraper] {page_num}페이지 종료")
-                break
-            print(f"[scraper] {page_num}페이지: {len(new_items)}건")
-            recalls.extend(new_items)
-            page_num += 1
+            items = _parse_driver_table(driver)
+            # 중복 제거 (deptReceiptNo 기준)
+            for item in items:
+                dno = item.get("deptReceiptNo", "")
+                key = dno or str(item)
+                if key not in seen_dnos:
+                    seen_dnos.add(key)
+                    recalls.append(item)
 
+            print(f"[scraper] 구간{chunk_num} 수집: {len(items)}건")
+            chunk_start = chunk_end + timedelta(days=1)
+            chunk_num  += 1
+
+        print(f"[scraper] 전체 수집: {len(recalls)}건")
         return recalls
     finally:
         driver.quit()
