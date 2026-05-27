@@ -662,12 +662,10 @@ def fetch_recall_detail(dept_receipt_no: str) -> list:
     """
     import re as _re
 
-    end = datetime.now().strftime("%Y-%m-%d")
-    start = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
+    # 날짜 파라미터 없이 deptReceiptNo만으로 접근 (날짜 범위 제한 시 일부 건 조회 실패 방지)
     detail_url = (
         f"{BASE_URL}/recall/view/MNU20265"
-        f"?startPlanSbmsnDt={start}&mid=MNU20265&searchYn=true"
-        f"&pageNum=1&endPlanSbmsnDt={end}&deptReceiptNo={dept_receipt_no}"
+        f"?mid=MNU20265&pageNum=1&deptReceiptNo={dept_receipt_no}"
     )
 
     sess = requests.Session()
