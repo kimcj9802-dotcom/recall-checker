@@ -257,24 +257,22 @@ def _try_selenium() -> list:
             driver.get(RECALL_URL)
             time.sleep(2)
 
-            # 날짜 필드 설정
+            # 날짜 필드 설정 (MFDS 실제 필드명 직접 지정)
             driver.execute_script(f"""
-                const startSels = ['[name*="start" i]','[name*="bgn" i]','[name*="strt" i]','[id*="start" i]','[id*="bgn" i]'];
-                const endSels   = ['[name*="end" i]',  '[name*="cls" i]', '[name*="fnsh" i]','[id*="end" i]',  '[id*="cls" i]'];
-                function setVal(sels, val) {{
-                    for (const s of sels) {{
-                        for (const el of document.querySelectorAll(s)) {{
-                            if (el.type === 'text' || el.type === 'date') {{
-                                el.value = val;
-                                el.dispatchEvent(new Event('change', {{bubbles:true}}));
-                                return true;
-                            }}
+                function setField(names, val) {{
+                    for (const name of names) {{
+                        const el = document.querySelector('[name="' + name + '"], [id="' + name + '"]');
+                        if (el) {{
+                            el.value = val;
+                            el.dispatchEvent(new Event('change', {{bubbles:true}}));
+                            el.dispatchEvent(new Event('input',  {{bubbles:true}}));
+                            return true;
                         }}
                     }}
                     return false;
                 }}
-                setVal(startSels, '{cs}');
-                setVal(endSels,   '{ce}');
+                setField(['startPlanSbmsnDt','schStartDt','startDt'], '{cs}');
+                setField(['endPlanSbmsnDt',  'schEndDt',  'endDt'],   '{ce}');
             """)
 
             # 검색 버튼 클릭
