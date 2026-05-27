@@ -153,9 +153,14 @@
       </div></div></div>
     </div>
 
-    <div id="noMatchAlert" class="alert alert-success d-flex gap-2 align-items-center" style="display:none!important">
+    <div id="noMatchAlert" class="alert alert-success d-none gap-2 align-items-center">
       <i class="bi bi-check-circle-fill fs-5"></i>
       <div><strong>이상 없음</strong> — 회수대상에 해당하는 자산이 발견되지 않았습니다.</div>
+    </div>
+
+    <div id="hasMatchAlert" class="alert alert-warning d-none gap-2 align-items-center">
+      <i class="bi bi-exclamation-triangle-fill fs-5"></i>
+      <div id="hasMatchAlertText"></div>
     </div>
 
     <div id="matchListWrap" style="display:none">
@@ -549,12 +554,32 @@ function renderResults(data) {
 
   document.getElementById('resultSection').style.display = 'block';
 
+  const noMatchEl   = document.getElementById('noMatchAlert');
+  const hasMatchEl  = document.getElementById('hasMatchAlert');
+  const hasMatchTxt = document.getElementById('hasMatchAlertText');
+  const listWrap    = document.getElementById('matchListWrap');
+
   if (lastMatches.length === 0) {
-    document.getElementById('noMatchAlert').style.display = 'flex';
-    document.getElementById('matchListWrap').style.display = 'none';
+    noMatchEl.classList.remove('d-none');
+    noMatchEl.style.display = 'flex';
+    hasMatchEl.classList.add('d-none');
+    listWrap.style.display = 'none';
   } else {
-    document.getElementById('noMatchAlert').style.display = 'none';
-    document.getElementById('matchListWrap').style.display = 'block';
+    noMatchEl.classList.add('d-none');
+    hasMatchEl.classList.remove('d-none');
+    hasMatchEl.style.display = 'flex';
+    const highCnt = data.high_count || 0;
+    const lowCnt  = data.low_count  || 0;
+    let msg = '하단의 <strong>매칭된 자산 목록</strong>을 확인하고 해당 자산을 점검해 주세요.';
+    if (highCnt > 0 && lowCnt > 0) {
+      msg = `<strong>높은 가능성 ${highCnt}건 · 검토 필요 ${lowCnt}건</strong>이 발견되었습니다. 하단 목록을 검토해 주세요.`;
+    } else if (highCnt > 0) {
+      msg = `<strong>높은 가능성 ${highCnt}건</strong>이 발견되었습니다. 즉시 확인이 필요합니다.`;
+    } else if (lowCnt > 0) {
+      msg = `<strong>검토 필요 ${lowCnt}건</strong>이 발견되었습니다. 하단 목록을 검토해 주세요.`;
+    }
+    hasMatchTxt.innerHTML = msg;
+    listWrap.style.display = 'block';
     filterList('all');
   }
 }
