@@ -237,9 +237,9 @@ def _try_selenium() -> list:
     driver = _create_driver(opts)
     try:
         wait = WebDriverWait(driver, 20)
-        # 30일을 15일씩 나눠 조회 → 각 구간 최대 ~7건으로 페이지네이션 불필요
-        end_dt   = datetime.now()
-        start_dt = end_dt - timedelta(days=30)
+        # 30일을 10일씩 나눠 구간별 폼 제출 → 날짜 필터 정확 적용
+        end_dt     = datetime.now()
+        start_dt   = end_dt - timedelta(days=30)
         chunk_days = 10
 
         seen_dnos = set()
@@ -251,32 +251,69 @@ def _try_selenium() -> list:
             chunk_end = min(chunk_start + timedelta(days=chunk_days), end_dt)
             cs = chunk_start.strftime("%Y-%m-%d")
             ce = chunk_end.strftime("%Y-%m-%d")
-
-            url = (
-                f"{RECALL_URL}?searchYn=true&mid=MNU20265"
-                f"&startPlanSbmsnDt={cs}&endPlanSbmsnDt={ce}"
-                f"&pageIndex=1&pageUnit=10"
-            )
             print(f"[scraper] 구간{chunk_num}: {cs} ~ {ce}")
-            driver.get(url)
 
-            try:
-                wait.until(EC.presence_of_element_located(
-                    (By.CSS_SELECTOR, "table tbody tr")))
-            except Exception:
-                pass
+            # 매 구간마다 MFDS 페이지 새로 로드 후 날짜 입력 → 검색 버튼 클릭
+            driver.get(RECALL_URL)
             time.sleep(2)
 
+            # 날짜 필드 설정
+            driver.execute_script(f"""
+                const startSels = ['[name*="start" i]','[name*="bgn" i]','[name*="strt" i]','[id*="start" i]','[id*="bgn" i]'];
+                const endSels   = ['[name*="end" i]',  '[name*="cls" i]', '[name*="fnsh" i]','[id*="end" i]',  '[id*="cls" i]'];
+                function setVal(sels, val) {{
+                    for (const s of sels) {{
+                        for (const el of document.querySelectorAll(s)) {{
+                            if (el.type === 'text' || el.type === 'date') {{
+                                el.value = val;
+                                el.dispatchEvent(new Event('change', {{bubbles:true}}));
+                                return true;
+                            }}
+                        }}
+                    }}
+                    return false;
+                }}
+                setVal(startSels, '{cs}');
+                setVal(endSels,   '{ce}');
+            """)
+
+            # 검색 버튼 클릭
+            search_btn = None
+            for selector in [
+                (By.XPATH, "//button[contains(., '검색')]"),
+                (By.XPATH, "//input[@type='button' and @value='검색']"),
+                (By.XPATH, "//a[contains(., '검색') and not(contains(., '재검색'))]"),
+                (By.CSS_SELECTOR, "button.btn-search, button.search-btn, .btn_search"),
+            ]:
+                try:
+                    search_btn = wait.until(EC.element_to_be_clickable(selector))
+                    break
+                except Exception:
+                    continue
+
+            if search_btn:
+                search_btn.click()
+            else:
+                try:
+                    driver.execute_script("document.querySelector('form').submit()")
+                except Exception:
+                    pass
+
+            time.sleep(3)
+
             items = _parse_driver_table(driver)
+
             # 중복 제거 (deptReceiptNo 기준)
+            new_cnt = 0
             for item in items:
                 dno = item.get("deptReceiptNo", "")
-                key = dno or str(item)
-                if key not in seen_dnos:
+                key = dno if dno else f"{item.get('품목명','')}-{item.get('업체명','')}-{item.get('보고일','')}"
+                if key and key not in seen_dnos:
                     seen_dnos.add(key)
                     recalls.append(item)
+                    new_cnt += 1
 
-            print(f"[scraper] 구간{chunk_num} 수집: {len(items)}건")
+            print(f"[scraper] 구간{chunk_num} 수집: {new_cnt}건 (신규)")
             chunk_start = chunk_end + timedelta(days=1)
             chunk_num  += 1
 
