@@ -261,68 +261,65 @@ def _try_selenium() -> list:
         if api_data:
             return api_data
 
-        # 렌더링된 HTML 테이블 파싱
+        # 1페이지 DOM 파싱
         recalls = _parse_driver_table(driver)
         print(f"[scraper] 1페이지: {len(recalls)}건")
 
-        # 페이지네이션 — JS로 페이지 링크 클릭 (날짜 세션 유지)
+        # Selenium 쿠키 추출 → requests로 2페이지~ API 호출 (날짜 필터 유지)
+        cookies = {c["name"]: c["value"] for c in driver.get_cookies()}
+        api_headers = {
+            **_HEADERS,
+            "X-Requested-With": "XMLHttpRequest",
+            "Referer": RECALL_URL,
+        }
+        base_params = {
+            "searchYn": "true",
+            "mid": "MNU20265",
+            "startPlanSbmsnDt": start_date,
+            "endPlanSbmsnDt":   end_date,
+            "pageUnit": "10",
+            "searchGbn": "", "searchWrd": "",
+            "rcllPrgYn": "", "govCorpGbn": "",
+        }
+
         page_num = 2
         while page_num <= 100:
-            # 현재 첫 행 텍스트 기억 (변경 감지용)
-            first_row_before = driver.execute_script("""
-                const tr = document.querySelector('table tbody tr');
-                return tr ? tr.innerText.trim() : '';
-            """)
+            params = {**base_params, "pageIndex": str(page_num), "pageNum": str(page_num)}
+            page_data = []
 
-            # JS로 숫자 텍스트가 page_num인 링크 클릭
-            clicked = driver.execute_script(f"""
-                const links = document.querySelectorAll('a');
-                for (const a of links) {{
-                    if (a.textContent.trim() === '{page_num}') {{
-                        a.click();
-                        return true;
-                    }}
-                }}
-                return false;
-            """)
-
-            if not clicked:
-                print(f"[scraper] {page_num}페이지 링크 없음 — 종료")
-                break
-
-            # 첫 행이 바뀔 때까지 대기 (최대 10초)
-            for _ in range(20):
-                time.sleep(0.5)
-                first_row_after = driver.execute_script("""
-                    const tr = document.querySelector('table tbody tr');
-                    return tr ? tr.innerText.trim() : '';
-                """)
-                if first_row_after != first_row_before:
+            for ep in _SEARCH_ENDPOINTS:
+                for method in ("post", "get"):
+                    try:
+                        fn = getattr(requests, method)
+                        kw = {"data": params} if method == "post" else {"params": params}
+                        r = fn(
+                            f"{BASE_URL}{ep}", cookies=cookies,
+                            headers=api_headers, timeout=15, **kw
+                        )
+                        if r.status_code != 200:
+                            continue
+                        ct = r.headers.get("content-type", "")
+                        if "json" in ct:
+                            items = _extract_list(r.json())
+                            if items:
+                                page_data = _normalize_items(items)
+                                break
+                        elif "html" in ct:
+                            rows = _parse_html(r.text)
+                            if rows:
+                                page_data = rows
+                                break
+                    except Exception:
+                        pass
+                if page_data:
                     break
 
-            # 행 수가 연속 3회 동일할 때까지 대기 (AJAX 완전 로드 확인)
-            prev_count = -1
-            stable = 0
-            for _ in range(30):
-                time.sleep(0.5)
-                curr_count = driver.execute_script(
-                    "return document.querySelectorAll('table tbody tr').length"
-                )
-                if curr_count > 0 and curr_count == prev_count:
-                    stable += 1
-                    if stable >= 3:
-                        break
-                else:
-                    stable = 0
-                prev_count = curr_count
-
-            new_items = _parse_driver_table(driver)
-            if not new_items:
-                print(f"[scraper] {page_num}페이지 데이터 없음 — 종료")
+            if not page_data:
+                print(f"[scraper] {page_num}페이지 종료")
                 break
 
-            print(f"[scraper] {page_num}페이지: {len(new_items)}건")
-            recalls.extend(new_items)
+            print(f"[scraper] {page_num}페이지: {len(page_data)}건")
+            recalls.extend(page_data)
             page_num += 1
 
         return recalls
