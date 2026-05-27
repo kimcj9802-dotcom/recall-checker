@@ -257,48 +257,43 @@ def _try_selenium() -> list:
         time.sleep(2)
 
         # 네트워크 로그에서 실제 API 엔드포인트 탐지
-        api_endpoint, api_cookies = _find_list_api(driver)
+        api_endpoint, api_method, api_raw_params, api_cookies = _find_list_api(driver)
 
         # 1페이지 DOM 파싱
         recalls = _parse_driver_table(driver)
         print(f"[scraper] 1페이지: {len(recalls)}건")
 
-        # 2페이지~: 탐지된 API 엔드포인트로 직접 호출
-        if api_endpoint:
+        # 2페이지~: 원본 요청 파라미터에서 pageIndex만 바꿔 재호출
+        if api_endpoint and api_raw_params:
+            from urllib.parse import parse_qs, urlencode
             print(f"[scraper] API 엔드포인트: {api_endpoint}")
+            # 원본 파라미터 파싱
+            orig = {k: v[0] if isinstance(v, list) else v
+                    for k, v in parse_qs(api_raw_params, keep_blank_values=True).items()}
             page_num = 2
             while page_num <= 100:
-                params = {
-                    "searchYn": "true", "mid": "MNU20265",
-                    "startPlanSbmsnDt": start_date, "endPlanSbmsnDt": end_date,
-                    "pageIndex": str(page_num), "pageNum": str(page_num),
-                    "pageUnit": "10",
-                }
+                params = {**orig, "pageIndex": str(page_num), "pageNum": str(page_num)}
                 page_data = []
-                for method in ("post", "get"):
-                    try:
-                        fn = getattr(requests, method)
-                        kw = {"data": params} if method == "post" else {"params": params}
-                        r = fn(api_endpoint, cookies=api_cookies,
-                               headers={**_HEADERS, "X-Requested-With": "XMLHttpRequest",
-                                        "Referer": RECALL_URL},
-                               timeout=15, **kw)
-                        if r.status_code == 200:
-                            ct = r.headers.get("content-type", "")
-                            if "json" in ct:
-                                items = _extract_list(r.json())
-                                if items:
-                                    page_data = _normalize_items(items)
-                                    break
-                            elif "html" in ct:
-                                rows = _parse_html(r.text)
-                                if rows:
-                                    page_data = rows
-                                    break
-                    except Exception:
-                        pass
-                    if page_data:
-                        break
+                req_method = (api_method or "post").lower()
+                try:
+                    fn = getattr(requests, req_method)
+                    kw = {"data": params} if req_method == "post" else {"params": params}
+                    r = fn(api_endpoint, cookies=api_cookies,
+                           headers={**_HEADERS, "X-Requested-With": "XMLHttpRequest",
+                                    "Referer": RECALL_URL},
+                           timeout=15, **kw)
+                    if r.status_code == 200:
+                        ct = r.headers.get("content-type", "")
+                        if "json" in ct:
+                            items = _extract_list(r.json())
+                            if items:
+                                page_data = _normalize_items(items)
+                        elif "html" in ct:
+                            rows = _parse_html(r.text)
+                            if rows:
+                                page_data = rows
+                except Exception as e:
+                    print(f"[scraper] {page_num}페이지 오류: {e}")
                 if not page_data:
                     print(f"[scraper] {page_num}페이지 종료")
                     break
@@ -395,8 +390,9 @@ def _create_driver(chrome_opts):
 
 
 def _find_list_api(driver) -> tuple:
-    """네트워크 로그에서 MFDS 목록 API URL과 쿠키를 찾아 반환"""
+    """네트워크 로그에서 MFDS 목록 API의 URL·메서드·원본 파라미터·쿠키를 반환"""
     import json as _json
+    from urllib.parse import parse_qs, urlencode, urlparse
     cookies = {c["name"]: c["value"] for c in driver.get_cookies()}
     try:
         logs = driver.get_log("performance")
@@ -406,15 +402,21 @@ def _find_list_api(driver) -> tuple:
                 continue
             req = msg["params"].get("request", {})
             url = req.get("url", "")
-            # MFDS 도메인의 목록 관련 엔드포인트 탐지
-            if "mfds.go.kr" in url and any(k in url for k in
-                    ["List", "list", "Rcll", "rcll", "recall", "MNU20265"]):
-                if url != driver.current_url and "pageIndex" not in url:
-                    print(f"[scraper] 탐지된 API: {url.split('?')[0]}")
-                    return url.split("?")[0], cookies
+            if "mfds.go.kr" not in url:
+                continue
+            if "/list/" not in url.lower() and "List" not in url:
+                continue
+            method    = req.get("method", "GET")
+            post_data = req.get("postData", "")
+            base_url  = url.split("?")[0]
+            # GET 파라미터도 수집
+            qs = urlparse(url).query
+            print(f"[scraper] API 탐지: {method} {base_url}")
+            print(f"[scraper] POST body: {post_data[:200]}")
+            return base_url, method, post_data or qs, cookies
     except Exception as e:
         print(f"[scraper] API 탐지 실패: {e}")
-    return None, cookies
+    return None, None, None, cookies
 
 
 def _capture_from_network_logs(driver) -> list:
