@@ -100,15 +100,40 @@ def _upgrade_by_lot(matches: list) -> list:
 
 def _read_excel_smart(file_bytes: bytes) -> pd.DataFrame:
     """
-    첫 행이 비어 있는 Excel을 자동으로 처리.
-    header=0 → 컬럼이 모두 Unnamed이면 header=1, 2 순서로 재시도.
+    첫 번째 시트에서 자산 관련 컬럼(한글명칭, 모델명, 제조번호 등)이
+    가장 많이 감지되는 헤더 행(0~5)을 자동 선택.
     """
+    ASSET_KEYWORDS = [
+        "한글명칭", "명칭", "기기명", "장비명", "제품명", "품목명",
+        "모델명", "모델", "제조번호", "시리얼", "자산번호", "관리번호",
+        "제조사", "업체명", "제조업체",
+    ]
+    best_df = None
+    best_score = -1
+
+    for header_row in range(6):  # 헤더가 최대 5번째 행까지 있을 수 있음
+        try:
+            df = pd.read_excel(io.BytesIO(file_bytes), header=header_row)
+            if df.empty:
+                continue
+            score = sum(
+                1 for col in df.columns
+                if any(kw in str(col) for kw in ASSET_KEYWORDS)
+            )
+            if score > best_score:
+                best_score = score
+                best_df = df
+        except Exception:
+            continue
+
+    if best_df is not None and best_score > 0:
+        return best_df
+
+    # 폴백: 기존 방식
     for header_row in range(3):
         df = pd.read_excel(io.BytesIO(file_bytes), header=header_row)
-        # 의미 있는 컬럼명이 하나라도 있으면 사용
         if not all("Unnamed" in str(c) for c in df.columns):
             return df
-    # 그래도 안 되면 기본값 반환
     return pd.read_excel(io.BytesIO(file_bytes))
 
 # 백그라운드 갱신 상태
