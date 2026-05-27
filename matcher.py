@@ -5,7 +5,8 @@ from thefuzz import fuzz
 
 # 매칭 임계값 (0~100)
 THRESHOLD_HIGH = 85   # 확실한 매칭
-THRESHOLD_LOW = 65    # 가능성 있는 매칭 (검토 필요)
+THRESHOLD_LOW = 70    # 가능성 있는 매칭 (검토 필요) ← 65→70 상향
+THRESHOLD_NAME_MIN = 70  # 제품명 최소 유사도 (이 미만이면 종합점수 무관하게 제외)
 
 
 def _clean(text: str) -> str:
@@ -143,6 +144,10 @@ def find_matches(asset_df: pd.DataFrame, recalls: list) -> list:
             name_score  = _match_score(asset["name"], r_name)
             maker_score = _maker_score(asset["maker"], r_maker)
             model_score = _match_score(asset["model"], r_model) if asset["model"] and r_model else 50
+
+            # 제품명 유사도가 너무 낮으면 제외 (어미 우연 일치 등 오매칭 방지)
+            if name_score < THRESHOLD_NAME_MIN:
+                continue
 
             # 가중 점수: 제품명 50% + 업체명 30% + 모델명 20%
             combined = name_score * 0.5 + maker_score * 0.3 + model_score * 0.2
