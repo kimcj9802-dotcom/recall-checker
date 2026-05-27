@@ -242,7 +242,7 @@ def _try_selenium() -> list:
         search_url = (
             f"{RECALL_URL}?searchYn=true&mid=MNU20265"
             f"&startPlanSbmsnDt={start_date}&endPlanSbmsnDt={end_date}"
-            f"&pageIndex=1&pageUnit=100"
+            f"&pageIndex=1&pageUnit=10"
         )
         print(f"[scraper] MFDS 접속: {start_date} ~ {end_date}")
         driver.get(search_url)
@@ -256,14 +256,55 @@ def _try_selenium() -> list:
             pass
         time.sleep(2)
 
-        # 네트워크 로그에서 API 엔드포인트 + 데이터 캡처
-        api_data = _capture_from_network_logs(driver)
-        if api_data:
-            return api_data
+        # 네트워크 로그에서 실제 API 엔드포인트 탐지
+        api_endpoint, api_cookies = _find_list_api(driver)
 
-        # 전체 데이터 한 번에 파싱 (pageUnit=100으로 페이지네이션 불필요)
+        # 1페이지 DOM 파싱
         recalls = _parse_driver_table(driver)
-        print(f"[scraper] 수집: {len(recalls)}건")
+        print(f"[scraper] 1페이지: {len(recalls)}건")
+
+        # 2페이지~: 탐지된 API 엔드포인트로 직접 호출
+        if api_endpoint:
+            print(f"[scraper] API 엔드포인트: {api_endpoint}")
+            page_num = 2
+            while page_num <= 100:
+                params = {
+                    "searchYn": "true", "mid": "MNU20265",
+                    "startPlanSbmsnDt": start_date, "endPlanSbmsnDt": end_date,
+                    "pageIndex": str(page_num), "pageNum": str(page_num),
+                    "pageUnit": "10",
+                }
+                page_data = []
+                for method in ("post", "get"):
+                    try:
+                        fn = getattr(requests, method)
+                        kw = {"data": params} if method == "post" else {"params": params}
+                        r = fn(api_endpoint, cookies=api_cookies,
+                               headers={**_HEADERS, "X-Requested-With": "XMLHttpRequest",
+                                        "Referer": RECALL_URL},
+                               timeout=15, **kw)
+                        if r.status_code == 200:
+                            ct = r.headers.get("content-type", "")
+                            if "json" in ct:
+                                items = _extract_list(r.json())
+                                if items:
+                                    page_data = _normalize_items(items)
+                                    break
+                            elif "html" in ct:
+                                rows = _parse_html(r.text)
+                                if rows:
+                                    page_data = rows
+                                    break
+                    except Exception:
+                        pass
+                    if page_data:
+                        break
+                if not page_data:
+                    print(f"[scraper] {page_num}페이지 종료")
+                    break
+                print(f"[scraper] {page_num}페이지: {len(page_data)}건")
+                recalls.extend(page_data)
+                page_num += 1
 
         return recalls
     finally:
@@ -351,6 +392,29 @@ def _create_driver(chrome_opts):
             f"브라우저를 찾을 수 없습니다: {e}\n"
             "Microsoft Edge 또는 Google Chrome이 설치되어 있어야 합니다."
         )
+
+
+def _find_list_api(driver) -> tuple:
+    """네트워크 로그에서 MFDS 목록 API URL과 쿠키를 찾아 반환"""
+    import json as _json
+    cookies = {c["name"]: c["value"] for c in driver.get_cookies()}
+    try:
+        logs = driver.get_log("performance")
+        for entry in logs:
+            msg = _json.loads(entry["message"])["message"]
+            if msg.get("method") != "Network.requestWillBeSent":
+                continue
+            req = msg["params"].get("request", {})
+            url = req.get("url", "")
+            # MFDS 도메인의 목록 관련 엔드포인트 탐지
+            if "mfds.go.kr" in url and any(k in url for k in
+                    ["List", "list", "Rcll", "rcll", "recall", "MNU20265"]):
+                if url != driver.current_url and "pageIndex" not in url:
+                    print(f"[scraper] 탐지된 API: {url.split('?')[0]}")
+                    return url.split("?")[0], cookies
+    except Exception as e:
+        print(f"[scraper] API 탐지 실패: {e}")
+    return None, cookies
 
 
 def _capture_from_network_logs(driver) -> list:
