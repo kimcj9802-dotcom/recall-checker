@@ -244,6 +244,7 @@ def _try_selenium() -> list:
 
         seen_dnos = set()
         recalls   = []
+        rescued   = {}  # 날짜 범위 밖이지만 아직 미수집 항목 {key: item}
 
         chunk_start = start_dt
         chunk_num   = 1
@@ -306,12 +307,16 @@ def _try_selenium() -> list:
             items = _parse_driver_table(driver)
             print(f"[scraper] 구간{chunk_num} 원본: {len(items)}건 파싱")
 
-            # ── 클라이언트 측 날짜 필터 (서버 필터 보완) ──
-            # 보고일이 이 구간 범위 안에 있는 항목만 유지
-            # 보고일 없거나 파싱 실패 시 포함(제외하지 않음)
-            filtered = []
+            new_cnt = 0
             for item in items:
+                dno = item.get("deptReceiptNo", "")
+                key = dno if dno else f"{item.get('품목명','')}-{item.get('업체명','')}-{item.get('보고일','')}"
+                if not key:
+                    continue
+
+                # 날짜 파싱 → 구간 범위 내 여부 확인
                 date_str = item.get("보고일", "").strip()
+                in_range = True  # 날짜 없으면 범위 안으로 처리
                 if date_str and date_str not in ("-", "None", "nan"):
                     parsed_d = None
                     for fmt in ("%Y-%m-%d", "%Y.%m.%d", "%Y/%m/%d"):
@@ -321,29 +326,34 @@ def _try_selenium() -> list:
                         except ValueError:
                             continue
                     if parsed_d:
-                        if chunk_start <= parsed_d <= chunk_end:
-                            filtered.append(item)
-                        else:
-                            print(f"[scraper]   날짜 범위 외 제외: {date_str} ({item.get('품목명','')})")
-                        continue
-                # 날짜 없거나 파싱 불가 → 포함
-                filtered.append(item)
-            items = filtered
-            print(f"[scraper] 구간{chunk_num} 날짜필터 후: {len(items)}건")
+                        in_range = chunk_start <= parsed_d <= chunk_end
 
-            # 중복 제거 (deptReceiptNo 기준)
-            new_cnt = 0
-            for item in items:
-                dno = item.get("deptReceiptNo", "")
-                key = dno if dno else f"{item.get('품목명','')}-{item.get('업체명','')}-{item.get('보고일','')}"
-                if key and key not in seen_dnos:
-                    seen_dnos.add(key)
-                    recalls.append(item)
-                    new_cnt += 1
+                if in_range:
+                    # 구간 범위 내: 즉시 수집, rescued에서 제거
+                    if key not in seen_dnos:
+                        seen_dnos.add(key)
+                        recalls.append(item)
+                        new_cnt += 1
+                        rescued.pop(key, None)
+                else:
+                    # 구간 범위 외: 아직 미수집이면 rescued에 보관
+                    if key not in seen_dnos:
+                        rescued[key] = item
+                        print(f"[scraper]   범위 외 보관: {date_str} ({item.get('품목명','')})")
 
             print(f"[scraper] 구간{chunk_num} 수집: {new_cnt}건 (신규)")
             chunk_start = chunk_end + timedelta(days=1)
             chunk_num  += 1
+
+        # 어느 구간에서도 날짜 범위 안으로 처리 안 된 항목 추가 (누락 방지)
+        rescued_cnt = 0
+        for key, item in rescued.items():
+            if key not in seen_dnos:
+                seen_dnos.add(key)
+                recalls.append(item)
+                rescued_cnt += 1
+        if rescued_cnt:
+            print(f"[scraper] 구조 항목 추가: {rescued_cnt}건")
 
         print(f"[scraper] 전체 수집: {len(recalls)}건")
         return recalls
