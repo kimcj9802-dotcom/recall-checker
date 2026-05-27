@@ -263,37 +263,41 @@ def _try_selenium() -> list:
         recalls = _parse_driver_table(driver)
         print(f"[scraper] 1페이지: {len(recalls)}건")
 
-        # 2페이지~: 원본 요청 파라미터에서 pageIndex만 바꿔 재호출
-        if api_endpoint and api_raw_params:
-            from urllib.parse import parse_qs, urlencode
+        # 2페이지~: 탐지된 API에 날짜 파라미터 명시해서 GET 호출
+        if api_endpoint:
             print(f"[scraper] API 엔드포인트: {api_endpoint}")
-            # 원본 파라미터 파싱
-            orig = {k: v[0] if isinstance(v, list) else v
-                    for k, v in parse_qs(api_raw_params, keep_blank_values=True).items()}
             page_num = 2
             while page_num <= 100:
-                params = {**orig, "pageIndex": str(page_num), "pageNum": str(page_num)}
+                params = {
+                    "searchYn": "true", "mid": "MNU20265",
+                    "startPlanSbmsnDt": start_date, "endPlanSbmsnDt": end_date,
+                    "pageIndex": str(page_num), "pageNum": str(page_num),
+                    "pageUnit": "10",
+                }
                 page_data = []
-                req_method = (api_method or "post").lower()
-                try:
-                    fn = getattr(requests, req_method)
-                    kw = {"data": params} if req_method == "post" else {"params": params}
-                    r = fn(api_endpoint, cookies=api_cookies,
-                           headers={**_HEADERS, "X-Requested-With": "XMLHttpRequest",
-                                    "Referer": RECALL_URL},
-                           timeout=15, **kw)
-                    if r.status_code == 200:
-                        ct = r.headers.get("content-type", "")
-                        if "json" in ct:
-                            items = _extract_list(r.json())
-                            if items:
-                                page_data = _normalize_items(items)
-                        elif "html" in ct:
-                            rows = _parse_html(r.text)
-                            if rows:
-                                page_data = rows
-                except Exception as e:
-                    print(f"[scraper] {page_num}페이지 오류: {e}")
+                # GET / POST 모두 시도
+                for req_method in ("get", "post"):
+                    try:
+                        fn = getattr(requests, req_method)
+                        kw = {"params": params} if req_method == "get" else {"data": params}
+                        r = fn(api_endpoint, cookies=api_cookies,
+                               headers={**_HEADERS, "X-Requested-With": "XMLHttpRequest",
+                                        "Referer": RECALL_URL},
+                               timeout=15, **kw)
+                        if r.status_code == 200:
+                            ct = r.headers.get("content-type", "")
+                            if "json" in ct:
+                                items = _extract_list(r.json())
+                                if items:
+                                    page_data = _normalize_items(items)
+                                    break
+                            elif "html" in ct:
+                                rows = _parse_html(r.text)
+                                if rows:
+                                    page_data = rows
+                                    break
+                    except Exception as e:
+                        print(f"[scraper] {page_num}페이지 {req_method} 오류: {e}")
                 if not page_data:
                     print(f"[scraper] {page_num}페이지 종료")
                     break
