@@ -263,47 +263,34 @@ def _try_selenium() -> list:
         recalls = _parse_driver_table(driver)
         print(f"[scraper] 1페이지: {len(recalls)}건")
 
-        # 2페이지~: 탐지된 API에 날짜 파라미터 명시해서 GET 호출
-        if api_endpoint:
-            print(f"[scraper] API 엔드포인트: {api_endpoint}")
-            page_num = 2
-            while page_num <= 100:
-                params = {
-                    "searchYn": "true", "mid": "MNU20265",
-                    "startPlanSbmsnDt": start_date, "endPlanSbmsnDt": end_date,
-                    "pageIndex": str(page_num), "pageNum": str(page_num),
-                    "pageUnit": "10",
-                }
-                page_data = []
-                # GET / POST 모두 시도
-                for req_method in ("get", "post"):
-                    try:
-                        fn = getattr(requests, req_method)
-                        kw = {"params": params} if req_method == "get" else {"data": params}
-                        r = fn(api_endpoint, cookies=api_cookies,
-                               headers={**_HEADERS, "X-Requested-With": "XMLHttpRequest",
-                                        "Referer": RECALL_URL},
-                               timeout=15, **kw)
-                        if r.status_code == 200:
-                            ct = r.headers.get("content-type", "")
-                            if "json" in ct:
-                                items = _extract_list(r.json())
-                                if items:
-                                    page_data = _normalize_items(items)
-                                    break
-                            elif "html" in ct:
-                                rows = _parse_html(r.text)
-                                if rows:
-                                    page_data = rows
-                                    break
-                    except Exception as e:
-                        print(f"[scraper] {page_num}페이지 {req_method} 오류: {e}")
-                if not page_data:
-                    print(f"[scraper] {page_num}페이지 종료")
+        # 2페이지~: Selenium으로 직접 접속 (세션 유지, 날짜 필터 보존)
+        page_num = 2
+        while page_num <= 100:
+            page_url = (
+                f"{RECALL_URL}?searchYn=true&mid=MNU20265"
+                f"&startPlanSbmsnDt={start_date}&endPlanSbmsnDt={end_date}"
+                f"&pageIndex={page_num}&pageUnit=10"
+            )
+            driver.get(page_url)
+
+            # 테이블 td가 3개 이상 생길 때까지 최대 15초 대기
+            deadline = time.time() + 15
+            while time.time() < deadline:
+                td_count = driver.execute_script(
+                    "return document.querySelectorAll('table tbody tr td').length"
+                )
+                if td_count >= 3:
                     break
-                print(f"[scraper] {page_num}페이지: {len(page_data)}건")
-                recalls.extend(page_data)
-                page_num += 1
+                time.sleep(0.5)
+            time.sleep(1)  # 렌더링 마무리 대기
+
+            new_items = _parse_driver_table(driver)
+            if not new_items:
+                print(f"[scraper] {page_num}페이지 종료")
+                break
+            print(f"[scraper] {page_num}페이지: {len(new_items)}건")
+            recalls.extend(new_items)
+            page_num += 1
 
         return recalls
     finally:
