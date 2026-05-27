@@ -656,13 +656,16 @@ def fetch_recall_data(force_refresh: bool = False) -> list:
 def fetch_recall_detail(dept_receipt_no: str) -> list:
     """
     MFDS 상세 페이지에서 제조번호(로트) 목록 조회
-    - 1단계: 상세 HTML에서 recallItemSeq 목록 수집
-    - 2단계: /recall/view/model API로 제조번호 JSON 취득
+
+    근본 원인별 대응:
+    1) 세션/쿠키: 목록 페이지 방문 후 상세 접근 → 일부 품목 HTML 정상 반환
+    2) recallSeq 패턴: 따옴표 유무·속성명(recallSeq/recallItemSeq) 다양하게 처리
+    3) 폴백 강화: seq 미탐지 시 1~10 순서 시도, 3연속 빈 응답이면 조기 종료
+
     반환: [{"typeName": 모델명, "makeNo": 제조번호, "makeDate": 제조일자, "recallTargetQty": 수량}, ...]
     """
     import re as _re
 
-    # 날짜 파라미터 없이 deptReceiptNo만으로 접근 (날짜 범위 제한 시 일부 건 조회 실패 방지)
     detail_url = (
         f"{BASE_URL}/recall/view/MNU20265"
         f"?mid=MNU20265&pageNum=1&deptReceiptNo={dept_receipt_no}"
@@ -671,22 +674,47 @@ def fetch_recall_detail(dept_receipt_no: str) -> list:
     sess = requests.Session()
     sess.headers.update(_HEADERS)
 
-    # ── 1단계: 상세 페이지 로드 → recallSeq 목록 수집 ─────────
+    # ── 0단계: 목록 페이지 방문 → 세션/쿠키 확립 ─────────────────
+    # 세션 없이 바로 상세 접근 시 일부 품목에서 HTML 불완전 반환 방지
+    try:
+        sess.get(RECALL_URL, timeout=10)
+    except Exception:
+        pass
+
+    # ── 1단계: 상세 페이지 로드 → recallSeq 목록 수집 ─────────────
+    # MFDS HTML의 recallSeq 속성명·따옴표 유무가 품목마다 다를 수 있음
     seqs = []
     try:
         resp = sess.get(detail_url, timeout=15)
-        # <tr id="itemTr_1" recallSeq="1" ...> 패턴
-        seqs = list(dict.fromkeys(
-            _re.findall(r'recallSeq=["\'](\d+)["\']', resp.text)
-        ))
-    except Exception:
-        pass
-    if not seqs:
-        seqs = ["1"]  # 기본값
+        html = resp.text
+        for pat in [
+            r'recallItemSeq\s*=\s*["\'](\d+)["\']',  # recallItemSeq="1"
+            r'recallSeq\s*=\s*["\'](\d+)["\']',       # recallSeq="1"
+            r'recallItemSeq\s*=\s*(\d+)',              # recallItemSeq=1 (따옴표 없음)
+            r'recallSeq\s*=\s*(\d+)',                  # recallSeq=1 (따옴표 없음)
+            r'"recallItemSeq"\s*:\s*(\d+)',             # JSON 형태
+            r'"recallSeq"\s*:\s*(\d+)',                 # JSON 형태
+        ]:
+            found = list(dict.fromkeys(_re.findall(pat, html)))
+            if found:
+                seqs = found
+                print(f"[scraper] seq탐지({dept_receipt_no}): {found[:5]}")
+                break
+    except Exception as e:
+        print(f"[scraper] 상세페이지 오류({dept_receipt_no}): {e}")
 
-    # ── 2단계: recallSeq별 제조번호 API 호출 ──────────────────
+    # seq 미탐지 시 1~10 순서로 폴백 (3연속 빈 응답 시 조기 종료)
+    use_fallback = not seqs
+    if use_fallback:
+        seqs = [str(i) for i in range(1, 11)]
+        print(f"[scraper] seq미탐지({dept_receipt_no}) → 1~10 폴백 시도")
+
+    # ── 2단계: recallSeq별 제조번호 API 호출 ──────────────────────
     models = []
+    seen_keys: set = set()
     model_api = f"{BASE_URL}/recall/view/model"
+    consecutive_empty = 0
+
     for seq in seqs:
         try:
             r = sess.get(
@@ -699,11 +727,46 @@ def fetch_recall_detail(dept_receipt_no: str) -> list:
                 },
                 timeout=15,
             )
-            if r.status_code == 200 and "json" in r.headers.get("content-type", ""):
-                items = r.json().get("recallModel", [])
-                models.extend(items)
-        except Exception:
-            pass
+            if r.status_code != 200 or "json" not in r.headers.get("content-type", ""):
+                if use_fallback:
+                    consecutive_empty += 1
+                    if consecutive_empty >= 3:
+                        break
+                continue
+
+            data = r.json()
+            # 응답 키가 품목마다 다를 수 있으므로 여러 키 시도
+            items = (
+                data.get("recallModel")
+                or data.get("list")
+                or data.get("items")
+                or data.get("result")
+                or []
+            )
+
+            if not items:
+                if use_fallback:
+                    consecutive_empty += 1
+                    if consecutive_empty >= 3:
+                        break
+                continue
+
+            consecutive_empty = 0
+            for item in items:
+                key = f"{item.get('makeNo', '')}-{item.get('typeName', '')}"
+                if key not in seen_keys:
+                    seen_keys.add(key)
+                    models.append(item)
+
+        except Exception as e:
+            print(f"[scraper] model API 오류(seq={seq}): {e}")
+            if use_fallback:
+                consecutive_empty += 1
+
+    if models:
+        print(f"[scraper] 제조번호 {len(models)}건 ({dept_receipt_no})")
+    else:
+        print(f"[scraper] 제조번호 없음 ({dept_receipt_no}) — seqs={seqs[:5]}")
 
     return models
 
