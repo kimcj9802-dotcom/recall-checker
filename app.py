@@ -243,7 +243,7 @@ def refresh_status():
 
 @app.route("/api/recalls")
 def get_recalls():
-    """캐시된 회수목록 반환 (진행중 + 최근 2개월 필터)"""
+    """캐시된 회수목록 반환 (진행중 + 최근 1개월 필터)"""
     try:
         recalls = fetch_recall_data()
     except Exception as e:
