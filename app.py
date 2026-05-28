@@ -154,16 +154,45 @@ def index():
 
 @app.route("/api/debug-env")
 def debug_env():
-    """환경변수 진단용 (토큰 값은 노출하지 않음)"""
+    """환경변수 + GitHub API 실제 호출 진단"""
+    import requests as _req
     token = os.environ.get("RECALL_GITHUB_TOKEN", "")
+    repo  = os.environ.get("GITHUB_REPO", "kimcj9802-dotcom/recall-checker")
     github_cache = os.environ.get("GITHUB_CACHE_URL", "")
-    # GITHUB/TOKEN/RECALL 포함 키 목록 (값 제외)
     related_keys = [k for k in os.environ if any(x in k.upper() for x in ["GITHUB", "TOKEN", "RECALL"])]
+
+    # 실제 GitHub API 호출 결과
+    api_result = {}
+    if token:
+        try:
+            api_url = f"https://api.github.com/repos/{repo}/actions/workflows/scrape_recalls.yml/dispatches"
+            resp = _req.post(
+                api_url,
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Accept": "application/vnd.github+json",
+                    "X-GitHub-Api-Version": "2022-11-28",
+                },
+                json={"ref": "main"},
+                timeout=15,
+            )
+            api_result = {
+                "status_code": resp.status_code,
+                "success": resp.status_code == 204,
+                "body": resp.text[:500],
+            }
+        except Exception as e:
+            api_result = {"error": str(e)}
+    else:
+        api_result = {"skipped": "token 없음"}
+
     return jsonify({
         "RECALL_GITHUB_TOKEN_set": bool(token),
         "RECALL_GITHUB_TOKEN_prefix": token[:6] + "..." if token else "(없음)",
         "GITHUB_CACHE_URL_set": bool(github_cache),
+        "GITHUB_REPO": repo,
         "related_env_keys": sorted(related_keys),
+        "workflow_dispatch_test": api_result,
     })
 
 
