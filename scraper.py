@@ -632,12 +632,12 @@ def trigger_workflow_refresh() -> tuple:
       GITHUB_TOKEN : Personal Access Token (Actions: write 권한)
       GITHUB_REPO  : "owner/repo" 형식 (기본: kimcj9802-dotcom/recall-checker)
     """
-    token    = os.environ.get("GITHUB_TOKEN", "")
+    token    = os.environ.get("RECALL_GITHUB_TOKEN", "")
     repo     = os.environ.get("GITHUB_REPO", "kimcj9802-dotcom/recall-checker")
     workflow = "scrape_recalls.yml"
 
     if not token:
-        return False, "GITHUB_TOKEN 환경변수 미설정"
+        return False, "RECALL_GITHUB_TOKEN 환경변수 미설정"
 
     api_url = f"https://api.github.com/repos/{repo}/actions/workflows/{workflow}/dispatches"
     try:
