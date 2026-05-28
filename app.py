@@ -188,12 +188,16 @@ def refresh_recalls():
     if _refresh_state["running"]:
         return jsonify({"success": False, "error": "이미 갱신 중입니다."}), 409
 
+    # 스레드 시작 전에 상태 초기화 (폴링 타이밍 경합 방지)
+    # running=True를 스레드 내부에서 설정하면 JS 첫 폴링이 running=False를
+    # 읽고 즉시 fallback 메시지를 띄우는 race condition 발생
+    _refresh_state["running"]            = True
+    _refresh_state["error"]              = None
+    _refresh_state["workflow_triggered"] = False
+    _refresh_state["workflow_message"]   = ""
+    _refresh_state["workflow_waiting"]   = False
+
     def _do_refresh():
-        _refresh_state["running"]            = True
-        _refresh_state["error"]              = None
-        _refresh_state["workflow_triggered"] = False
-        _refresh_state["workflow_message"]   = ""
-        _refresh_state["workflow_waiting"]   = False
         try:
             # 1) GitHub Actions 워크플로우 트리거 (RECALL_GITHUB_TOKEN 설정 시)
             ok, msg = trigger_workflow_refresh()
