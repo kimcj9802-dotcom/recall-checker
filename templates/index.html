@@ -496,11 +496,7 @@ function pollRefreshStatus() {
       // 진행 상태 메시지 실시간 업데이트
       const el = document.getElementById('cacheStatus');
       if (d.running) {
-        if (d.workflow_waiting) {
-          el.innerHTML = '<span class="text-primary">🔄 MFDS 스크래핑 진행 중… 완료 시 자동으로 반영됩니다.</span>';
-        } else {
-          el.innerHTML = '<span class="text-muted">워크플로우 요청 중…</span>';
-        }
+        el.innerHTML = '<span class="text-muted">🔄 워크플로우 요청 중…</span>';
       }
 
       if (!d.running) {
@@ -511,14 +507,14 @@ function pollRefreshStatus() {
         if (d.error) {
           toast('갱신 실패: ' + d.error, 'danger');
         } else if (d.workflow_triggered) {
-          const isComplete = d.workflow_message && d.workflow_message.includes('완료');
-          toast(d.workflow_message, isComplete ? 'success' : 'warning', 8000);
+          // 트리거 성공 → 즉시 캐시 상태 갱신 + 3분 후 자동 재확인
+          toast('✅ 갱신 요청 완료! GitHub Actions가 약 3분 후 데이터를 업데이트합니다.', 'success', 6000);
+          setTimeout(loadCacheInfo, 3 * 60 * 1000);
         } else {
-          // 워크플로우 트리거 실패 → 실제 원인 메시지 표시
-          const msg = d.workflow_message || 'RECALL_GITHUB_TOKEN 환경변수를 확인하세요.';
+          // 트리거 실패 → 실제 오류 메시지 표시 (토큰 미설정 / API 오류)
+          const msg = d.workflow_message || '알 수 없는 오류';
           toast(
-            `캐시 동기화 완료: ${d.count ? d.count.toLocaleString() + '건' : ''}<br>` +
-            `<small>워크플로우 트리거 실패: ${msg}</small>`,
+            `캐시 동기화 완료<br><small>갱신 요청 실패: ${msg}</small>`,
             'warning', 10000
           );
         }
