@@ -7,7 +7,7 @@ import pandas as pd
 from flask import Flask, jsonify, render_template, request, send_file
 
 from matcher import find_matches
-from scraper import fetch_recall_data, fetch_recall_detail, get_cache_info, load_recalls_from_file
+from scraper import fetch_recall_data, fetch_recall_detail, get_cache_info, load_recalls_from_file, trigger_workflow_refresh
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 20 * 1024 * 1024  # 20MB
@@ -137,7 +137,12 @@ def _read_excel_smart(file_bytes: bytes) -> pd.DataFrame:
     return pd.read_excel(io.BytesIO(file_bytes))
 
 # 백그라운드 갱신 상태
-_refresh_state = {"running": False, "error": None}
+_refresh_state = {
+    "running":            False,
+    "error":              None,
+    "workflow_triggered": False,   # GitHub Actions 트리거 성공 여부
+    "workflow_message":   "",      # 트리거 결과 메시지
+}
 
 
 @app.route("/")
@@ -165,9 +170,17 @@ def refresh_recalls():
         return jsonify({"success": False, "error": "이미 갱신 중입니다."}), 409
 
     def _do_refresh():
-        _refresh_state["running"] = True
-        _refresh_state["error"] = None
+        _refresh_state["running"]            = True
+        _refresh_state["error"]              = None
+        _refresh_state["workflow_triggered"] = False
+        _refresh_state["workflow_message"]   = ""
         try:
+            # 1) GitHub Actions 워크플로우 트리거 (GITHUB_TOKEN 설정 시)
+            ok, msg = trigger_workflow_refresh()
+            _refresh_state["workflow_triggered"] = ok
+            _refresh_state["workflow_message"]   = msg
+
+            # 2) 현재 GitHub 캐시를 즉시 동기화 (워크플로우 완료 전이라도 최신 파일 사용)
             fetch_recall_data(force_refresh=True)
         except Exception as e:
             _refresh_state["error"] = str(e)
@@ -181,8 +194,10 @@ def refresh_recalls():
 @app.route("/api/refresh-status")
 def refresh_status():
     return jsonify({
-        "running": _refresh_state["running"],
-        "error": _refresh_state["error"],
+        "running":            _refresh_state["running"],
+        "error":              _refresh_state["error"],
+        "workflow_triggered": _refresh_state["workflow_triggered"],
+        "workflow_message":   _refresh_state["workflow_message"],
         **get_cache_info(),
     })
 

@@ -44,11 +44,18 @@ def _load_cache(ignore_expiry=False):
         return None
 
 
-def _save_cache(recalls: list):
+def _save_cache(recalls: list, scraped_at: str = ""):
+    """
+    scraped_at: 실제 MFDS 스크래핑 시각 (GitHub Actions가 기록한 시각).
+    미전달 시 현재 시각으로 기록.
+    """
     os.makedirs(os.path.dirname(CACHE_FILE), exist_ok=True)
     with open(CACHE_FILE, "w", encoding="utf-8") as f:
-        json.dump({"cached_at": datetime.now().isoformat(), "recalls": recalls},
-                  f, ensure_ascii=False, indent=2)
+        json.dump({
+            "cached_at":  scraped_at or datetime.now().isoformat(),
+            "fetched_at": datetime.now().isoformat(),   # Render가 GitHub에서 받은 시각
+            "recalls":    recalls,
+        }, f, ensure_ascii=False, indent=2)
 
 
 def get_cache_info() -> dict:
@@ -57,14 +64,21 @@ def get_cache_info() -> dict:
     try:
         with open(CACHE_FILE, "r", encoding="utf-8") as f:
             data = json.load(f)
-        cached_at = datetime.fromisoformat(data.get("cached_at", "2000-01-01"))
+        cached_at  = datetime.fromisoformat(data.get("cached_at",  "2000-01-01"))
+        fetched_at = data.get("fetched_at", "")
         count = len(data.get("recalls", []))
-        return {
-            "exists": True,
-            "cached_at": cached_at.strftime("%Y-%m-%d %H:%M"),
-            "count": count,
-            "expired": datetime.now() - cached_at > timedelta(hours=CACHE_HOURS),
+        info = {
+            "exists":    True,
+            "cached_at": cached_at.strftime("%Y-%m-%d %H:%M"),   # 실제 수집(스크래핑) 시각
+            "count":     count,
+            "expired":   datetime.now() - cached_at > timedelta(hours=CACHE_HOURS),
         }
+        if fetched_at:
+            try:
+                info["fetched_at"] = datetime.fromisoformat(fetched_at).strftime("%Y-%m-%d %H:%M")
+            except Exception:
+                pass
+        return info
     except Exception:
         return {"exists": False, "count": 0}
 
@@ -585,13 +599,53 @@ def _fetch_from_github() -> list:
         r.raise_for_status()
         data = r.json()
         recalls = data.get("recalls", [])
+        # GitHub Actions가 기록한 실제 스크래핑 시각을 그대로 보존
+        scraped_at = data.get("cached_at", "")
         if recalls:
-            _save_cache(recalls)
-            print(f"[scraper] GitHub 캐시 로드 완료: {len(recalls)}건")
+            _save_cache(recalls, scraped_at=scraped_at)
+            print(f"[scraper] GitHub 캐시 로드 완료: {len(recalls)}건 (수집: {scraped_at})")
         return recalls
     except Exception as e:
         print(f"[scraper] GitHub 캐시 로드 실패: {e}")
         return []
+
+
+def trigger_workflow_refresh() -> tuple:
+    """
+    GitHub Actions 워크플로우를 workflow_dispatch 이벤트로 트리거.
+    Render 환경에서 "즉시 갱신"을 가능하게 함.
+
+    필요한 환경변수:
+      GITHUB_TOKEN : Personal Access Token (Actions: write 권한)
+      GITHUB_REPO  : "owner/repo" 형식 (기본: kimcj9802-dotcom/recall-checker)
+    """
+    token    = os.environ.get("GITHUB_TOKEN", "")
+    repo     = os.environ.get("GITHUB_REPO", "kimcj9802-dotcom/recall-checker")
+    workflow = "scrape_recalls.yml"
+
+    if not token:
+        return False, "GITHUB_TOKEN 환경변수 미설정"
+
+    api_url = f"https://api.github.com/repos/{repo}/actions/workflows/{workflow}/dispatches"
+    try:
+        resp = requests.post(
+            api_url,
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Accept": "application/vnd.github+json",
+                "X-GitHub-Api-Version": "2022-11-28",
+            },
+            json={"ref": "main"},
+            timeout=15,
+        )
+        if resp.status_code == 204:
+            print(f"[scraper] GitHub Actions 워크플로우 트리거 성공 ({repo})")
+            return True, "MFDS 스크래핑 워크플로우를 시작했습니다. 약 2~3분 소요됩니다."
+        print(f"[scraper] GitHub Actions 트리거 실패: {resp.status_code} {resp.text[:200]}")
+        return False, f"GitHub API 오류 ({resp.status_code})"
+    except Exception as e:
+        print(f"[scraper] GitHub Actions 트리거 예외: {e}")
+        return False, str(e)
 
 
 # ── 공개 API ─────────────────────────────────────────────────
