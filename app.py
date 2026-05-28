@@ -152,6 +152,21 @@ def index():
     return render_template("index.html")
 
 
+@app.route("/api/debug-env")
+def debug_env():
+    """환경변수 진단용 (토큰 값은 노출하지 않음)"""
+    token = os.environ.get("RECALL_GITHUB_TOKEN", "")
+    github_cache = os.environ.get("GITHUB_CACHE_URL", "")
+    # GITHUB/TOKEN/RECALL 포함 키 목록 (값 제외)
+    related_keys = [k for k in os.environ if any(x in k.upper() for x in ["GITHUB", "TOKEN", "RECALL"])]
+    return jsonify({
+        "RECALL_GITHUB_TOKEN_set": bool(token),
+        "RECALL_GITHUB_TOKEN_prefix": token[:6] + "..." if token else "(없음)",
+        "GITHUB_CACHE_URL_set": bool(github_cache),
+        "related_env_keys": sorted(related_keys),
+    })
+
+
 @app.route("/api/cache-info")
 def cache_info():
     # fetch_recall_data()를 먼저 호출해 캐시 파일을 확보한 뒤 get_cache_info()로 읽어야
