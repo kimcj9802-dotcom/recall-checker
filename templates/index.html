@@ -514,11 +514,12 @@ function pollRefreshStatus() {
           const isComplete = d.workflow_message && d.workflow_message.includes('완료');
           toast(d.workflow_message, isComplete ? 'success' : 'warning', 8000);
         } else {
-          // 워크플로우 트리거 불가(GITHUB_TOKEN 없음) → 기존 캐시 동기화만
+          // 워크플로우 트리거 실패 → 실제 원인 메시지 표시
+          const msg = d.workflow_message || 'RECALL_GITHUB_TOKEN 환경변수를 확인하세요.';
           toast(
             `캐시 동기화 완료: ${d.count ? d.count.toLocaleString() + '건' : ''}<br>` +
-            `<small>실시간 갱신하려면 Render 환경변수에 RECALL_GITHUB_TOKEN을 설정하세요.</small>`,
-            'secondary', 6000
+            `<small>워크플로우 트리거 실패: ${msg}</small>`,
+            'warning', 10000
           );
         }
         loadCacheInfo();

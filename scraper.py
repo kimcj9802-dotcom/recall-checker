@@ -654,8 +654,9 @@ def trigger_workflow_refresh() -> tuple:
         if resp.status_code == 204:
             print(f"[scraper] GitHub Actions 워크플로우 트리거 성공 ({repo})")
             return True, "MFDS 스크래핑 워크플로우를 시작했습니다. 약 2~3분 소요됩니다."
-        print(f"[scraper] GitHub Actions 트리거 실패: {resp.status_code} {resp.text[:200]}")
-        return False, f"GitHub API 오류 ({resp.status_code})"
+        body = resp.text[:300]
+        print(f"[scraper] GitHub Actions 트리거 실패: {resp.status_code} {body}")
+        return False, f"GitHub API {resp.status_code}: {body}"
     except Exception as e:
         print(f"[scraper] GitHub Actions 트리거 예외: {e}")
         return False, str(e)
