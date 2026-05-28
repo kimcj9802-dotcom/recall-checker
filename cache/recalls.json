@@ -1,6 +1,6 @@
 {
-  "cached_at": "2026-05-28T06:34:24.177336",
-  "fetched_at": "2026-05-28T06:34:24.177343",
+  "cached_at": "2026-05-28T06:43:36.494913",
+  "fetched_at": "2026-05-28T06:43:36.494920",
   "recalls": [
     {
       "deptReceiptNo": "202600090561",
@@ -71,8 +71,8 @@
     {
       "deptReceiptNo": "202600096535",
       "보고일": "2026-05-17",
-      "상세링크": "https://emedi.mfds.go.kr/recall/view/MNU20265?mid=MNU20265&pageNum=1&&deptReceiptNo=202600096535",
-      "순번": "4",
+      "상세링크": "https://emedi.mfds.go.kr/recall/view/MNU20265?startPlanSbmsnDt=2026-05-09&mid=MNU20265&searchYn=true&pageNum=1&endPlanSbmsnDt=2026-05-19&deptReceiptNo=202600096535",
+      "순번": "1",
       "업체명": "지이헬스케어코리아(주)",
       "회수구분": "영업자 회수보고",
       "품목명": "거치형보육기",
@@ -82,8 +82,8 @@
     {
       "deptReceiptNo": "202600094188",
       "보고일": "2026-05-14",
-      "상세링크": "https://emedi.mfds.go.kr/recall/view/MNU20265?mid=MNU20265&pageNum=1&&deptReceiptNo=202600094188",
-      "순번": "5",
+      "상세링크": "https://emedi.mfds.go.kr/recall/view/MNU20265?startPlanSbmsnDt=2026-05-09&mid=MNU20265&pageNum=1&endPlanSbmsnDt=2026-05-19&deptReceiptNo=202600094188",
+      "순번": "2",
       "업체명": "메드트로닉코리아(유)",
       "회수구분": "영업자 회수보고",
       "품목명": "이동형 엑스선 투시 촬영장치",
@@ -143,28 +143,6 @@
       "회수구분": "정부 회수보고",
       "품목명": "채혈 또는 수혈 및 생체 검사용 기구",
       "허가번호": "",
-      "회수진행여부": "진행중"
-    },
-    {
-      "deptReceiptNo": "202600101282",
-      "보고일": "2026-05-21",
-      "상세링크": "https://emedi.mfds.go.kr/recall/view/MNU20265?mid=MNU20265&pageNum=1&&deptReceiptNo=202600101282",
-      "순번": "2",
-      "업체명": "주식회사 에스에스힐",
-      "회수구분": "정부 회수보고",
-      "품목명": "국소 지혈용 드레싱",
-      "허가번호": "제인 23-4981 호",
-      "회수진행여부": "진행중"
-    },
-    {
-      "deptReceiptNo": "202600087045",
-      "보고일": "2026-04-30",
-      "상세링크": "https://emedi.mfds.go.kr/recall/view/MNU20265?mid=MNU20265&pageNum=1&&deptReceiptNo=202600087045",
-      "순번": "9",
-      "업체명": "지이헬스케어코리아(주)",
-      "회수구분": "영업자 회수보고",
-      "품목명": "거치형 디지털식 순환기용 엑스선 투시 진단장치",
-      "허가번호": "수인 23-315 호",
       "회수진행여부": "진행중"
     }
   ]
