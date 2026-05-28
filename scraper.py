@@ -318,7 +318,37 @@ def _try_selenium() -> list:
 
             time.sleep(3)
 
-            items = _parse_driver_table(driver)
+            # ── 1순위: 네트워크 로그 JSON 캡처 (페이지네이션 무관 전체 데이터) ──
+            items = _capture_from_network_logs(driver)
+            if items:
+                print(f"[scraper] 구간{chunk_num} 네트워크 캡처: {len(items)}건")
+            else:
+                # ── 2순위: 페이지 크기 select 최대화 후 HTML 파싱 ──
+                try:
+                    changed = driver.execute_script("""
+                        let changed = false;
+                        for (const sel of document.querySelectorAll('select')) {
+                            const nm = (sel.name + sel.id).toLowerCase();
+                            if (nm.match(/unit|size|rows|count|per/)) {
+                                const opts = [...sel.options]
+                                    .filter(o => parseInt(o.value) > 10)
+                                    .sort((a,b) => parseInt(b.value)-parseInt(a.value));
+                                if (opts.length) {
+                                    sel.value = opts[0].value;
+                                    sel.dispatchEvent(new Event('change', {bubbles:true}));
+                                    changed = true;
+                                    break;
+                                }
+                            }
+                        }
+                        return changed;
+                    """)
+                    if changed:
+                        time.sleep(2)  # 페이지 재로드 대기
+                except Exception:
+                    pass
+                items = _parse_driver_table(driver)
+
             print(f"[scraper] 구간{chunk_num} 원본: {len(items)}건 파싱")
 
             new_cnt = 0
