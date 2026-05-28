@@ -493,31 +493,39 @@ function pollRefreshStatus() {
   refreshPoller = setInterval(async () => {
     try {
       const d = await (await fetch('/api/refresh-status')).json();
+
+      // 진행 상태 메시지 실시간 업데이트
+      const el = document.getElementById('cacheStatus');
+      if (d.running) {
+        if (d.workflow_waiting) {
+          el.innerHTML = '<span class="text-primary">🔄 MFDS 스크래핑 진행 중… 완료 시 자동으로 반영됩니다.</span>';
+        } else {
+          el.innerHTML = '<span class="text-muted">워크플로우 요청 중…</span>';
+        }
+      }
+
       if (!d.running) {
         clearInterval(refreshPoller);
         refreshPoller = null;
         stopRefreshUI();
+
         if (d.error) {
           toast('갱신 실패: ' + d.error, 'danger');
         } else if (d.workflow_triggered) {
-          // GitHub Actions 트리거 성공 → 2~3분 후 완료 안내
-          toast(
-            `스크래핑 요청 완료 — ${d.workflow_message}<br>` +
-            `완료 후 갱신 버튼을 한 번 더 누르면 최신 데이터가 반영됩니다.`,
-            'info', 8000
-          );
+          const isComplete = d.workflow_message && d.workflow_message.includes('완료');
+          toast(d.workflow_message, isComplete ? 'success' : 'warning', 8000);
         } else {
           // 워크플로우 트리거 불가(GITHUB_TOKEN 없음) → 기존 캐시 동기화만
           toast(
             `캐시 동기화 완료: ${d.count ? d.count.toLocaleString() + '건' : ''}<br>` +
-            `<small class="text-muted">실시간 갱신하려면 Render 환경변수에 GITHUB_TOKEN을 설정하세요.</small>`,
+            `<small>실시간 갱신하려면 Render 환경변수에 GITHUB_TOKEN을 설정하세요.</small>`,
             'secondary', 6000
           );
         }
         loadCacheInfo();
       }
     } catch {}
-  }, 2000);
+  }, 3000);
 }
 
 function stopRefreshUI() {

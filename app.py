@@ -7,7 +7,7 @@ import pandas as pd
 from flask import Flask, jsonify, render_template, request, send_file
 
 from matcher import find_matches
-from scraper import fetch_recall_data, fetch_recall_detail, get_cache_info, load_recalls_from_file, trigger_workflow_refresh
+from scraper import fetch_recall_data, fetch_recall_detail, get_cache_info, load_recalls_from_file, trigger_workflow_refresh, get_github_cached_at
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 20 * 1024 * 1024  # 20MB
@@ -142,6 +142,7 @@ _refresh_state = {
     "error":              None,
     "workflow_triggered": False,   # GitHub Actions 트리거 성공 여부
     "workflow_message":   "",      # 트리거 결과 메시지
+    "workflow_waiting":   False,   # 워크플로우 완료 대기 중 여부
 }
 
 
@@ -174,14 +175,35 @@ def refresh_recalls():
         _refresh_state["error"]              = None
         _refresh_state["workflow_triggered"] = False
         _refresh_state["workflow_message"]   = ""
+        _refresh_state["workflow_waiting"]   = False
         try:
-            # 1) GitHub Actions 워크플로우 트리거 (GITHUB_TOKEN 설정 시)
+            # 1) 트리거 전 현재 수집 시각 기록 (완료 감지용)
+            prev_cached_at = get_github_cached_at()
+
+            # 2) GitHub Actions 워크플로우 트리거 (GITHUB_TOKEN 설정 시)
             ok, msg = trigger_workflow_refresh()
             _refresh_state["workflow_triggered"] = ok
             _refresh_state["workflow_message"]   = msg
 
-            # 2) 현재 GitHub 캐시를 즉시 동기화 (워크플로우 완료 전이라도 최신 파일 사용)
-            fetch_recall_data(force_refresh=True)
+            if ok:
+                # 3) GitHub가 새 데이터를 커밋할 때까지 30초 간격으로 폴링 (최대 5분)
+                _refresh_state["workflow_waiting"] = True
+                import time as _time
+                deadline = _time.time() + 300  # 5분 타임아웃
+                while _time.time() < deadline:
+                    _time.sleep(30)
+                    new_cached_at = get_github_cached_at()
+                    if new_cached_at and new_cached_at != prev_cached_at:
+                        # 새 데이터 확인 → 로컬 캐시 업데이트
+                        fetch_recall_data(force_refresh=True)
+                        _refresh_state["workflow_message"] = "스크래핑 완료! 최신 데이터로 갱신되었습니다."
+                        break
+                else:
+                    _refresh_state["workflow_message"] = "5분 내 완료 미확인 — 잠시 후 다시 확인해 주세요."
+                _refresh_state["workflow_waiting"] = False
+            else:
+                # 트리거 실패(토큰 없음 등) → 현재 GitHub 캐시 동기화만
+                fetch_recall_data(force_refresh=True)
         except Exception as e:
             _refresh_state["error"] = str(e)
         finally:
@@ -198,6 +220,7 @@ def refresh_status():
         "error":              _refresh_state["error"],
         "workflow_triggered": _refresh_state["workflow_triggered"],
         "workflow_message":   _refresh_state["workflow_message"],
+        "workflow_waiting":   _refresh_state["workflow_waiting"],
         **get_cache_info(),
     })
 

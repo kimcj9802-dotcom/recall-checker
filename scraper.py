@@ -610,6 +610,19 @@ def _fetch_from_github() -> list:
         return []
 
 
+def get_github_cached_at() -> str:
+    """GitHub 원본 파일의 cached_at(실제 수집 시각) 반환. 비교용."""
+    url = os.environ.get("GITHUB_CACHE_URL", "")
+    if not url:
+        return ""
+    try:
+        r = requests.get(url, timeout=10)
+        r.raise_for_status()
+        return r.json().get("cached_at", "")
+    except Exception:
+        return ""
+
+
 def trigger_workflow_refresh() -> tuple:
     """
     GitHub Actions 워크플로우를 workflow_dispatch 이벤트로 트리거.
