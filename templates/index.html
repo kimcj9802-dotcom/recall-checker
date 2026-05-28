@@ -518,7 +518,7 @@ function pollRefreshStatus() {
           // 워크플로우 트리거 불가(GITHUB_TOKEN 없음) → 기존 캐시 동기화만
           toast(
             `캐시 동기화 완료: ${d.count ? d.count.toLocaleString() + '건' : ''}<br>` +
-            `<small>실시간 갱신하려면 Render 환경변수에 GITHUB_TOKEN을 설정하세요.</small>`,
+            `<small>실시간 갱신하려면 Render 환경변수에 RECALL_GITHUB_TOKEN을 설정하세요.</small>`,
             'secondary', 6000
           );
         }
